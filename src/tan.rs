@@ -1,28 +1,42 @@
-use std::str::FromStr;
+use serde::Deserialize;
 
-use crate::error::ResponseError;
+new_type_ids!(
+    pub struct TanChallengeId
+);
 
+#[derive(Clone, Debug, Deserialize, getset::Getters)]
+#[getset(get = "pub(crate)")]
 pub(crate) struct TanChallenge {
-    pub(crate) id: String,
-    // pub(crate) typ: TanChallengeType
-    // pub(crate) available_types: Vec<String>
-    // pub(crate) challenge: Option<String>
+    id: TanChallengeId,
+    typ: TanChallengeType,
+    #[serde(rename = "availableTypes")]
+    available_types: Vec<TanChallengeType>,
+    challenge: Option<String>,
 }
 
-#[derive(PartialEq)]
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq)]
 pub(crate) enum TanChallengeType {
+    #[serde(rename = "P_TAN_PUSH")]
     PushTan,
+    #[serde(rename = "P_TAN")]
     PhotoTan,
+    #[serde(rename = "P_TAN_APP")]
+    PhotoTanApp,
+    #[serde(rename = "M_TAN")]
+    MobileTan,
+    #[serde(rename = "TAN_FREI")]
+    Free,
 }
 
-impl FromStr for TanChallengeType {
-    type Err = ResponseError;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s {
-            "P_TAN_PUSH" => Ok(TanChallengeType::PushTan),
-            "P_TAN" => Ok(TanChallengeType::PhotoTan),
-            _ => Err(ResponseError::UnexpectedResponseValue)
+impl TanChallengeType {
+    pub const fn to_authentication_info(&self) -> &'static str {
+        use TanChallengeType::*;
+        match self {
+            PushTan => r#"{"typ":"P_TAN_PUSH"}"#,
+            PhotoTan => r#"{"typ":"P_TAN"}"#,
+            PhotoTanApp => r#"{"typ":"P_TAN_APP"}"#,
+            MobileTan => r#"{"typ":"M_TAN"}"#,
+            Free => r#"{"typ":"TAN_FREI"}"#,
         }
     }
 }
