@@ -1,32 +1,31 @@
-use serde::{Deserialize, Deserializer, Serialize};
+use pecunia::{serde_with};
+use serde::{Deserialize, Serialize};
 use stock_market_utils::order::OrderStatus;
-
-// noinspection RsTypeCheck
-pub(crate) fn deserialize<'de, D>(deserializer: D) -> Result<OrderStatus, D::Error>
-    where D: Deserializer<'de> {
-    RemoteOrderStatus::deserialize(deserializer)
-}
 
 #[derive(Serialize, Deserialize)]
 #[serde(remote = "OrderStatus")]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
-enum RemoteOrderStatus {
+enum OrderStatusDef {
     Open,
-    #[serde(alias = "Settled")]
+    #[serde(alias = "SETTLED")]
     Executed,
     PartiallyExecuted,
-    #[serde(alias = "CancelledSystem")]
-    #[serde(alias = "CancelledTrade")]
-    #[serde(alias = "CancelledUser")]
+    #[serde(alias = "CANCELLED_SYSTEM")]
+    #[serde(alias = "CANCELLED_TRADE")]
+    #[serde(alias = "CANCELLED_USER")]
     Canceled,
     PartiallyCanceled,
     Expired,
+    #[serde(alias = "WAITING")]
     Pending,
     Unknown,
 }
 
+serde_with!(Serializer for OrderStatus as pub(crate) OrderStatusSerializer with "OrderStatusDef");
+serde_with!(Deserializer for OrderStatus as pub(crate) OrderStatusDeserializer with "OrderStatusDef");
+
 pub(crate) mod option {
     use super::*;
-
-    serde_option!(serialize OrderStatus, "RemoteOrderStatus");
+    pecunia::serde_option!(serialize OrderStatus as pub(crate) OrderStatusOptionSerialier with OrderStatusSerializer);
+    pecunia::serde_option!(deserialize OrderStatus as pub(crate) OrderStatusOptionDeserialier with OrderStatusDeserializer);
 }

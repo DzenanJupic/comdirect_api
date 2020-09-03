@@ -1,16 +1,11 @@
-use serde::{Deserialize, Deserializer, Serialize};
+use serde::{Deserialize, Serialize};
 use stock_market_utils::order::OrderType;
-
-// noinspection RsTypeCheck
-pub(crate) fn deserialize<'de, D>(deserializer: D) -> Result<OrderType, D::Error>
-    where D: Deserializer<'de> {
-    RemoteOrderType::deserialize(deserializer)
-}
+use pecunia::{serde_with, serde_option};
 
 #[derive(Serialize, Deserialize)]
 #[serde(remote = "OrderType")]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
-enum RemoteOrderType {
+enum OrderTypeDef {
     Market,
     Limit,
     StopMarket,
@@ -24,10 +19,12 @@ enum RemoteOrderType {
     Quote,
 }
 
+serde_with!(Serializer for OrderType as pub(crate) OrderTypeSerializer with "OrderTypeDef");
+serde_with!(Deserializer for OrderType as pub(crate) OrderTypeDeserializer with "OrderTypeDef");
+
 pub(crate) mod option {
     use super::*;
-
-    serde_option!(serialize OrderType, "RemoteOrderType");
+    serde_option!(serialize OrderType as pub(crate) OrderTypeOptionSerializer with OrderTypeSerializer);
 }
 
 pub(crate) mod venue_map {
@@ -47,7 +44,7 @@ pub(crate) mod venue_map {
 
     #[derive(Deserialize)]
     struct OrderTypeDeserializer(
-        #[serde(with = "RemoteOrderType")]
+        #[serde(with = "OrderTypeDef")]
         OrderType
     );
 

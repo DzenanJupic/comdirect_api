@@ -1,15 +1,10 @@
-use serde::{Deserialize, Deserializer};
+use serde::{Deserialize, Serialize};
 use stock_market_utils::order::AuctionType;
+use pecunia::{serde_with, serde_vec};
 
-// noinspection RsTypeCheck
-pub(crate) fn deserialize<'de, D>(deserializer: D) -> Result<AuctionType, D::Error>
-    where D: Deserializer<'de> {
-    RemoteAuctionType::deserialize(deserializer)
-}
-
-#[derive(Deserialize)]
+#[derive(Serialize, Deserialize)]
 #[serde(remote = "AuctionType")]
-enum RemoteAuctionType {
+enum AuctionTypeDef {
     #[serde(rename = "OAO")]
     OpeningAuctionOnly,
     #[serde(rename = "AO")]
@@ -22,8 +17,10 @@ enum RemoteAuctionType {
     All,
 }
 
+serde_with!(Serializer for AuctionType as pub(crate) AuctionTypeSerializer with "AuctionTypeDef");
+serde_with!(Deserializer for AuctionType as pub(crate) AuctionTypeDeserializer with "AuctionTypeDef");
+
 pub(crate) mod vec3 {
     use super::*;
-
-    serde_vec!(deserialize AuctionType, "RemoteAuctionType", max=3);
+    serde_vec!(deserialize AuctionType as pub(crate) AuctionTypeVecDeserializer with AuctionTypeDeserializer, max=3);
 }

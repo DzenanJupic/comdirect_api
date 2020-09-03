@@ -1,16 +1,24 @@
 use derive_more::{Display, Error as DeriveError};
+use reqwest::StatusCode;
 
 #[derive(Copy, Clone, Debug, Display, DeriveError)]
 pub enum Error {
     NoActiveSession,
     InvalidTan,
+    UnsupportedTanType,
     CouldNotCreateSession,
     CouldNotEndSession,
+
     UnexpectedResponseHeaders,
-    UnsupportedTanType,
     UnexpectedJsonValues,
-    ResponseError,
+    ResponseClientError,
+    ResponseServerError,
+    NotFound,
+    UnprocessedRequest,
+
+    NotSupported,
     IOError,
+
     Other,
 }
 
@@ -20,19 +28,15 @@ impl From<()> for Error {
 
 impl From<reqwest::Error> for Error {
     fn from(error: reqwest::Error) -> Self {
-        if error.is_status() {
-            Self::ResponseError
-        } else {
-            #[cfg(any(test, feature = "test"))]
-            println!("reqwest Error: `{}`", error);
-            Self::Other
+        #[cfg(any(test, feature = "test"))]
+        eprintln!("reqwest Error: `{}`", error);
+        match error.status() {
+            Some(StatusCode::NOT_FOUND) => Self::NotFound,
+            Some(StatusCode::UNPROCESSABLE_ENTITY) => Self::UnprocessedRequest,
+            Some(s) if s.is_client_error() => Self::ResponseClientError,
+            Some(s) if s.is_server_error() => Self::ResponseServerError,
+            _ => Self::Other
         }
-    }
-}
-
-impl From<reqwest::header::ToStrError> for Error {
-    fn from(_: reqwest::header::ToStrError) -> Self {
-        Self::UnexpectedResponseHeaders
     }
 }
 

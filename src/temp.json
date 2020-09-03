@@ -1,0 +1,12 @@
+{
+  "depotId": "C33C026057AB40E594B79E419E737DF6",
+  "instrumentId": "US5801351017",
+  "venueId": "3CD9835F2B6A429E829AFB6297FFF648",
+  "orderType": "MARKET",
+  "side": "BUY",
+  "bestEx": false,
+  "quantity": {
+    "unit": "XXX",
+    "value": 1.0
+  }
+}

@@ -23,6 +23,7 @@ pub mod instrument;
 pub mod order;
 pub mod market_place;
 pub mod position;
+pub mod order_outline;
 pub mod transaction;
 
 #[doc(hidden)]

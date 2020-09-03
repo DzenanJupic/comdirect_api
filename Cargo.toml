@@ -6,6 +6,7 @@ edition = "2018"
 
 [dependencies]
 derive_more = "0.99.9"
+derive_builder = "0.9.0"
 getset = "0.1.1"
 reqwest = { version = "0.10.7", features = ["blocking", "cookies", "json"] }
 rand = "0.7.3"
@@ -13,7 +14,7 @@ serde = "1.0.114"
 serde_json = "1.0.56"
 chrono = "0.4.13"
 
-finance-utils = { path = "C:/Users/info/Code/Rust/finance-utils", version = "0.1.0" }
+pecunia = { path = "C:/Users/info/Code/Rust/pecunia", version = "0.1.0" }
 stock-market-utils = { path = "C:/Users/info/Code/Rust/stock-market-utils", version = "0.1.0" }
 
 [dev-dependencies]

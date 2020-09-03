@@ -1,13 +1,12 @@
 use chrono::NaiveDate;
-use finance_utils::iso_codes::units::currency::Currency;
-use finance_utils::market_values::price::Price;
-use finance_utils::market_values::unit_value::UnitValue;
+use pecunia::iso_codes::units::currency::Currency;
+use pecunia::market_values::price::Price;
+use pecunia::market_values::unit_value::UnitValue;
 use serde::{Deserialize, Serialize};
 use stock_market_utils::derivative::{ISIN, WKN};
 
 use crate::deposit::ComdirectDeposit;
 use crate::position::Position;
-use crate::serde::transaction::RawTransactionDeserializer;
 
 new_type_ids!(
     pub struct TransactionId
@@ -20,14 +19,20 @@ pub struct Transaction<'d> {
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq)]
-#[serde(from = "crate::serde::transaction::RawTransactionDeserializer")]
+#[serde(rename_all = "camelCase")]
 pub struct RawTransaction {
+    #[serde(rename = "transaction_id")]
     id: Option<TransactionId>,
+    #[serde(rename = "bookingStatus")]
     status: BookingStatus,
+    #[serde(rename = "bookingDate")]
+    #[serde(with = "crate::serde::naive_date")]
     date: NaiveDate,
+    #[serde(rename = "transactionValue")]
     value: UnitValue<Currency, Price>,
+    #[serde(rename = "transactionDirection")]
     direction: TransactionDirection,
-    typ: TransactionType,
+    transaction_type: TransactionType,
 }
 
 #[derive(Copy, Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
@@ -75,19 +80,6 @@ impl<'d> Transaction<'d> {
         Self {
             deposit,
             raw,
-        }
-    }
-}
-
-impl From<RawTransactionDeserializer> for RawTransaction {
-    fn from(d: RawTransactionDeserializer) -> Self {
-        Self {
-            id: d.transaction_id,
-            status: d.booking_status,
-            date: d.booking_date,
-            value: d.transaction_value,
-            direction: d.transaction_direction,
-            typ: d.transaction_type,
         }
     }
 }

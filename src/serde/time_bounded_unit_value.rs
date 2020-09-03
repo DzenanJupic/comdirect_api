@@ -1,5 +1,5 @@
 /*use chrono::{TimeZone, DateTime};
-use finance_utils::market_values::unit_value::{TimeBoundedUnitValue, UnitValue};
+use pecunia::market_values::unit_value::{TimeBoundedUnitValue, UnitValue};
 use serde::{Deserialize, Deserializer};
 
 // noinspection RsTypeCheck
@@ -38,7 +38,7 @@ impl<U, V, Tz: TimeZone> From<RemoteTimeBoundedUnitValue<U, V, Tz>> for TimeBoun
 // this is an extremely ugly solution, but it works.
 
 use chrono::{DateTime, TimeZone};
-use finance_utils::market_values::unit_value::{TimeBoundedUnitValue, UnitValue};
+use pecunia::market_values::unit_value::{TimeBoundedUnitValue, UnitValue};
 use serde::{Deserialize, Deserializer};
 
 pub(crate) fn deserialize<'de, D, U, V, Tz: TimeZone>(

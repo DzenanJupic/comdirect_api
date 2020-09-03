@@ -8,20 +8,19 @@ use reqwest::{
 };
 use reqwest::blocking::RequestBuilder;
 use reqwest::header::{HeaderMap, HeaderValue};
-use stock_market_utils::deposit::Deposit;
 use stock_market_utils::derivative::Derivative;
 
 use crate::deposit::ComdirectDeposit;
 use crate::error::Error;
 use crate::instrument::Instrument;
-use crate::market_place::{MarketPlace, OrderDimensionsFilterParameters};
-use crate::order::{ComdirectOrder, OrderFilterParameters, RawComdirectOrder};
+use crate::market_place::{MarketPlace, OrderDimensionsFilterParameters, JsonResponseMarketplaces};
+use crate::order::{ComdirectOrder, OrderFilterParameters, OrderId, RawOrder};
 use crate::position::{Position, PositionId, RawPosition};
 use crate::serde::JsonResponseValues;
-use crate::serde::market_place::JsonResponseMarketplaces;
 use crate::session::{GrantType, PreSession, Session, SessionId, SessionStatus};
 use crate::tan::{TanChallenge, TanChallengeType};
 use crate::transaction::{RawTransaction, Transaction, TransactionFilterParameters};
+use crate::order_outline::ComdirectOrderOutline;
 
 const HEX_CHARSET: &[u8] = b"0123456789abcdef";
 
@@ -30,7 +29,7 @@ macro_rules! url {
 }
 
 macro_rules! response_is_success {
-    ($response:ident) => (response_is_success!($response, return Err(Error::ResponseError)););
+    ($response:ident) => (response_is_success!($response, return Err(Error::Other)););
     ($response:ident, $error_handle:stmt) => {
         if !$response.status().is_success() {
             #[cfg(any(test, feature = "test"))]
@@ -234,7 +233,8 @@ impl Comdirect {
             .headers()
             .get("x-once-authentication-info")
             .ok_or(Error::UnexpectedResponseHeaders)?
-            .to_str()?;
+            .to_str()
+            .map_err(|_| Error::UnexpectedResponseHeaders)?;
 
         let tan_challenge: TanChallenge = serde_json::from_str(authentication_info)?;
 
@@ -417,7 +417,7 @@ impl Comdirect {
         response_is_success!(response);
 
         let json = response.json::<JsonResponseMarketplaces>()?;
-        Ok(json.values.0.venues)
+        Ok(json.market_places())
     }
 
     pub fn get_orders<'d>(&self, deposit: &'d ComdirectDeposit, filter_parameters: &OrderFilterParameters) -> Result<Vec<ComdirectOrder<'d>>, Error> {
@@ -429,7 +429,7 @@ impl Comdirect {
             .send()?;
         response_is_success!(response);
 
-        let json = response.json::<JsonResponseValues<RawComdirectOrder>>()?;
+        let json = response.json::<JsonResponseValues<RawOrder>>()?;
 
         let mut orders = Vec::with_capacity(json.values.len());
         for raw in json.values {
@@ -439,8 +439,34 @@ impl Comdirect {
         Ok(orders)
     }
 
-    fn make_request_id() -> String {
-        Local::now().format("%H%M%S%.3f").to_string()
+    pub fn get_order<'d>(&self, deposit: &'d ComdirectDeposit, order_id: &OrderId) -> Result<ComdirectOrder<'d>, Error> {
+        let session = session_is_active!(self.session);
+        let url = format!("{}/{}", url!("/brokerage/v3/orders"), order_id.as_str());
+
+        let response = self.make_get_session_request(&url, session)
+            .send()?;
+        response_is_success!(response);
+
+        let raw = response.json::<RawOrder>()?;
+        Ok(ComdirectOrder::from_raw(raw, deposit))
+    }
+
+    pub fn pre_validate_order(&self, order_outline: &ComdirectOrderOutline) -> Result<(), Error> {
+        const URL: &str = url!("/brokerage/v3/orders/prevalidation");
+        let session = session_is_active!(self.session);
+
+        let request = self.make_post_session_request(URL, session)
+            .json(order_outline)
+            .build().unwrap();
+
+        let response = self.client.execute(request)?;
+
+        // println!("request: {}", String::from_utf8_lossy(request.body().unwrap().as_bytes().unwrap()));
+        // let response
+        response_is_success!(response);
+
+        println!("\n\nvalidation response: {}", response.text().unwrap());
+        Ok(())
     }
 
     fn make_session_id() -> SessionId {
@@ -452,6 +478,10 @@ impl Comdirect {
             })
             .collect();
         SessionId(session_id)
+    }
+
+    fn make_request_id() -> String {
+        Local::now().format("%H%M%S%.3f").to_string()
     }
 
     fn make_request_info(&self, session_id: &SessionId) -> String {

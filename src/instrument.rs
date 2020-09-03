@@ -1,8 +1,6 @@
-use finance_utils::iso_codes::units::currency::Currency;
+use pecunia::iso_codes::units::currency::Currency;
 use serde::Deserialize;
 use stock_market_utils::derivative::{Derivative, ISIN, SYMBOL, WKN};
-
-use crate::serde::instrument::InstrumentDeserializer;
 
 new_type_ids!(
     pub struct InstrumentId
@@ -10,12 +8,13 @@ new_type_ids!(
 );
 
 #[derive(Clone, Debug, Deserialize, PartialEq)]
-#[serde(from = "crate::serde::instrument::InstrumentDeserializer")]
 #[serde(rename_all = "camelCase")]
 pub struct Instrument {
+    #[serde(rename = "instrumentId")]
     id: InstrumentId,
     name: InstrumentName,
     isin: ISIN,
+    #[serde(rename = "mnemonic")]
     symbol: SYMBOL,
     wkn: WKN,
     static_data: StaticInstrumentData,
@@ -57,20 +56,5 @@ pub struct FundData {
 impl From<Derivative> for InstrumentId {
     fn from(d: Derivative) -> Self {
         Self(d.into())
-    }
-}
-
-impl From<InstrumentDeserializer> for Instrument {
-    fn from(d: InstrumentDeserializer) -> Self {
-        Self {
-            id: d.instrument_id,
-            name: d.name,
-            isin: d.isin,
-            symbol: d.mnemonic,
-            wkn: d.wkn,
-            static_data: d.static_data,
-            derivative_data: d.derivative_data,
-            fund_data: d.fund_distribution,
-        }
     }
 }

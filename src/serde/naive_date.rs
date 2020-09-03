@@ -1,6 +1,21 @@
 use chrono::NaiveDate;
+use pecunia::serde_option;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use serde::de::{Error, Unexpected};
+
+#[derive(Serialize)]
+#[serde(transparent)]
+pub(crate) struct NaiveDateSerializer<'a> {
+    #[serde(with = "self")]
+    pub(crate) remote: &'a NaiveDate
+}
+
+#[derive(Deserialize)]
+#[serde(transparent)]
+pub(crate) struct NaiveDateDeserializer {
+    #[serde(with = "self")]
+    pub(crate) remote: NaiveDate
+}
 
 pub(crate) fn serialize<S>(date: &NaiveDate, serializer: S) -> Result<S::Ok, S::Error> where S: Serializer {
     date
@@ -18,4 +33,9 @@ pub(crate) fn deserialize<'de, D>(deserializer: D) -> Result<NaiveDate, D::Error
             &"YYYY-MM-DD")
         )
 }
-serde_option!(NaiveDate, "crate::serde::naive_date");
+
+pub(crate) mod option {
+    use super::*;
+    serde_option!(serialize NaiveDate as pub(crate) NaiveDateOptionSerializer with NaiveDateSerializer);
+    serde_option!(deserialize NaiveDate as pub(crate) NaiveDateOptionDeserializer with NaiveDateDeserializer);
+}

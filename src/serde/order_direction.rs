@@ -1,28 +1,26 @@
-use serde::{Deserialize, Deserializer, Serialize};
+use serde::{Deserialize,  Serialize};
 use stock_market_utils::order::OrderDirection;
-
-// noinspection RsTypeCheck
-pub(crate) fn deserialize<'de, D>(deserializer: D) -> Result<OrderDirection, D::Error>
-    where D: Deserializer<'de> {
-    RemoteOrderDirection::deserialize(deserializer)
-}
+use pecunia::{serde_with, serde_option, serde_vec};
 
 #[derive(Serialize, Deserialize)]
 #[serde(remote = "OrderDirection")]
 #[serde(rename_all = "UPPERCASE")]
-enum RemoteOrderDirection {
+enum OrderDirectionDef {
     Buy,
     Sell,
 }
 
+serde_with!(Serializer for OrderDirection as pub(crate) OrderDirectionSerializer with "OrderDirectionDef");
+serde_with!(Deserializer for OrderDirection as pub(crate) OrderDirectionDeserializer with "OrderDirectionDef");
+
 pub(crate) mod option {
     use super::*;
-
-    serde_option!(serialize OrderDirection, "RemoteOrderDirection");
+    serde_option!(serialize OrderDirection as pub(crate) OrderDirectionOptionSerializer with OrderDirectionSerializer);
+    serde_option!(deserialize OrderDirection as pub(crate) OrderDirectionOptionDeserializer with OrderDirectionDeserializer);
 }
 
 pub(crate) mod vec2 {
     use super::*;
-
-    serde_vec!(deserialize OrderDirection, "RemoteOrderDirection", max=2);
+    serde_vec!(serialize OrderDirection as pub(crate) OrderDirectionVecSerializer with OrderDirectionSerializer);
+    serde_vec!(deserialize OrderDirection as pub(crate) OrderDirectionVecDeserializer with OrderDirectionDeserializer, max=2);
 }

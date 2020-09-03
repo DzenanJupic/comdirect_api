@@ -1,31 +1,22 @@
 use derive_more::Display;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use stock_market_utils::deposit::Deposit;
-
-use crate::serde::deposit::ComdirectDepositDeserializer;
 
 new_type_ids!(
     pub struct DepositId
     pub struct DepositDisplayId
 );
 
-#[derive(Clone, Debug, Deserialize, Display, PartialEq)]
-#[serde(from = "crate::serde::deposit::ComdirectDepositDeserializer")]
+#[derive(Clone, Debug, Serialize, Deserialize, Display, PartialEq, getset::Getters)]
+#[getset(get = "pub")]
 #[display(fmt = "{}", display_id)]
 pub struct ComdirectDeposit {
+    #[serde(rename = "depotId")]
     id: DepositId,
+    #[serde(rename = "depotDisplayId")]
     display_id: DepositDisplayId,
 }
 
 impl Deposit for ComdirectDeposit {
     fn id(&self) -> &str { &self.id.as_str() }
-}
-
-impl From<ComdirectDepositDeserializer> for ComdirectDeposit {
-    fn from(d: ComdirectDepositDeserializer) -> Self {
-        Self {
-            id: d.depot_id,
-            display_id: d.depot_display_id,
-        }
-    }
 }
