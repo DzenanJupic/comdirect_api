@@ -230,7 +230,6 @@ impl Comdirect {
         );
 
         let mut request = self.make_post_session_request(&url, &session);
-
         if let Some(tan_type) = request_tan_type {
             request = request.header("x-once-authentication-info", tan_type.to_authentication_info());
         }
@@ -241,28 +240,24 @@ impl Comdirect {
                 .send()?;
         response_is_success!(response);
 
-        let authentication_info = response
-            .headers()
-            .get("x-once-authentication-info")
-            .ok_or(Error::UnexpectedResponseHeaders)?
-            .to_str()
-            .map_err(|_| Error::UnexpectedResponseHeaders)?;
+        let tan_challenge: TanChallenge = Comdirect::extract_tan_challenge(response.headers())?;
 
-        let tan_challenge: TanChallenge = serde_json::from_str(authentication_info)?;
-
+        // todo: support other tan challenge types then PushTan
         match tan_challenge.typ() {
             TanChallengeType::PushTan => {}
-            _ => {
-                // todo: support other tan challenge types then PushTan
+            tan_type => match request_tan_type {
                 // to prevent loops, just request another type, if the current function call was not
-                // already a type request
-                if request_tan_type.is_none() {
-                    if tan_challenge.available_types().contains(&TanChallengeType::PushTan) {
+                // already a type request itself
+                Some(requested) => return match requested == *tan_type {
+                    true => Err(Error::UnsupportedTanType),
+                    false => Err(Error::UnexpectedTanType)
+                },
+                None => {
+                    return if tan_challenge.available_types().contains(&TanChallengeType::PushTan) {
                         let tan_challenge = self.request_tan_challenge(&session, Some(TanChallengeType::PushTan))?;
-                        return Ok(tan_challenge);
-                    }
+                        Ok(tan_challenge)
+                    } else { Err(Error::UnsupportedTanType) }
                 }
-                return Err(Error::UnsupportedTanType);
             }
         }
 
@@ -502,7 +497,7 @@ impl Comdirect {
         Ok(ComdirectOrder::from_raw(raw, deposit))
     }
 
-    pub fn pre_validate_order(&self, order_outline: &ComdirectOrderOutline) -> Result<(), Error> {
+    pub fn pre_validate_order_outline(&self, order_outline: &ComdirectOrderOutline) -> Result<(), Error> {
         const URL: &str = url!("/brokerage/v3/orders/prevalidation");
         let session = session_is_active!(self.session);
 
@@ -511,9 +506,31 @@ impl Comdirect {
             .send()?;
         response_is_success!(response);
 
+        // todo: maybe deserialize the response body
+        // the repose body is just a RawOrder
+        // RawOrder contains the expected value
+
         Ok(())
     }
 
+    pub fn validate_order_outline(&self, order_outline: &ComdirectOrderOutline) -> Result<(), Error> {
+        const URL: &str = url!("/brokerage/v3/orders/validation");
+        let session = session_is_active!(self.session);
+
+        let response = self.make_post_session_request(URL, session)
+            .json(order_outline)
+            .send()?;
+        response_is_success!(response);
+
+        let tan_challenge = Comdirect::extract_tan_challenge(response.headers())?;
+        if *tan_challenge.typ() != TanChallengeType::Free {
+            return Err(Error::UnexpectedTanType);
+        }
+
+        Ok(())
+    }
+
+    #[inline(always)]
     fn make_session_id() -> SessionId {
         let mut rng = rand::thread_rng();
         let session_id: String = (0..32)
@@ -525,16 +542,28 @@ impl Comdirect {
         SessionId(session_id)
     }
 
+    #[inline(always)]
     fn make_request_id() -> String {
         Local::now().format("%H%M%S%.3f").to_string()
     }
 
+    #[inline(always)]
     fn make_request_info(&self, session_id: &SessionId) -> String {
         format!(
             r#"{{"clientRequestId":{{"sessionId":"{}","requestId":"{}"}}}}"#,
             session_id.as_str(),
             Comdirect::make_request_id()
         )
+    }
+
+    #[inline(always)]
+    fn extract_tan_challenge(header_map: &HeaderMap) -> Result<TanChallenge, Error> {
+        let authentication_info = header_map
+            .get("x-once-authentication-info")
+            .ok_or(Error::UnexpectedResponseHeaders)?
+            .to_str()
+            .map_err(|_| Error::UnexpectedResponseHeaders)?;
+        Ok(serde_json::from_str(authentication_info)?)
     }
 
     session_request_method!(make_get_session_request, get);

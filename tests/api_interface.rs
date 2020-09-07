@@ -187,5 +187,28 @@ fn pre_validate_order_outline() {
         .unwrap();
 
     let order_outline = ComdirectOrderOutline::SingleOrder(order_outline);
-    SESSION.pre_validate_order(&order_outline).unwrap();
+    SESSION.pre_validate_order_outline(&order_outline).unwrap();
+}
+
+#[test]
+fn validate_order_outline() {
+    let deposits = SESSION.get_deposits().unwrap();
+    let mc_donalds_isin = ISIN::try_from("US0079031078").unwrap();
+    let mc_donalds = InstrumentId::from(Derivative::isin_from_str("US0079031078").unwrap());
+    let filter_parameters = MarketPlaceFilterParameters::builder()
+        .isin(&mc_donalds_isin)
+        .build().unwrap();
+    let market_places = SESSION.get_marketplaces_filtered(&filter_parameters).unwrap();
+
+    let order_outline = RawSingleOrderOutline::builder()
+        .deposit_id(deposits[0].id())
+        .market_place_id(market_places[1].id())
+        .instrument_id(&mc_donalds)
+        .quantity(F64::new(1.0))
+        .build()
+        .unwrap();
+
+    let order_outline = ComdirectOrderOutline::SingleOrder(order_outline);
+    SESSION.pre_validate_order_outline(&order_outline).unwrap();
+    SESSION.validate_order_outline(&order_outline).unwrap();
 }

@@ -5,7 +5,11 @@ use reqwest::StatusCode;
 pub enum Error {
     NoActiveSession,
     InvalidTan,
+    /// indicates that the 
     UnsupportedTanType,
+    /// will be used if either a requested tan type was not delivered, or when an active
+    /// session tan exists, but the response header indicates that the tan type is not Free
+    UnexpectedTanType,
     CouldNotCreateSession,
     CouldNotEndSession,
 
