@@ -1,10 +1,12 @@
 use std::collections::HashMap;
+
+use derive_builder::Builder;
 use getset::{Getters, Setters};
 use serde::{Deserialize, Serialize};
 use stock_market_utils::derivative::{ISIN, SYMBOL, WKN};
 use stock_market_utils::order::{AuctionType, OrderDirection, OrderType, OrderTypeExtension};
+
 use crate::order::ComdirectOrderValidityType;
-use derive_builder::Builder;
 
 new_type_ids!(
     pub struct MarketPlaceId
@@ -53,15 +55,15 @@ pub(crate) struct Dimensions {
 #[getset(set = "pub")]
 #[builder(setter(strip_option))]
 #[serde(rename_all = "camelCase")]
-pub struct OrderDimensionsFilterParameters {
-    instrument_id: Option<InstrumentId>,
+pub struct MarketPlaceFilterParameters<'a> {
+    instrument_id: Option<&'a InstrumentId>,
     #[serde(rename = "WKN")]
-    wkn: Option<WKN>,
+    wkn: Option<&'a WKN>,
     #[serde(rename = "ISIN")]
-    isin: Option<ISIN>,
+    isin: Option<&'a ISIN>,
     #[serde(rename = "mneomic")]
-    symbol: Option<SYMBOL>,
-    venue_id: Option<MarketPlaceId>,
+    symbol: Option<&'a SYMBOL>,
+    venue_id: Option<&'a MarketPlaceId>,
     #[serde(rename = "side")]
     #[serde(with = "crate::serde::order_direction::option")]
     order_direction: Option<OrderDirection>,
@@ -72,5 +74,11 @@ pub struct OrderDimensionsFilterParameters {
 impl JsonResponseMarketplaces {
     pub(crate) fn market_places(self) -> Vec<MarketPlace> {
         self.values.0.venues
+    }
+}
+
+impl<'a> MarketPlaceFilterParameters<'a> {
+    pub fn builder() -> MarketPlaceFilterParametersBuilder<'a> {
+        MarketPlaceFilterParametersBuilder::default()
     }
 }

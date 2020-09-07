@@ -1,16 +1,12 @@
 use chrono::{DateTime, Utc};
-use pecunia::iso_codes::units::currency::Currency;
-use pecunia::market_values::f64::F64;
-use pecunia::market_values::percent::Percent;
-use pecunia::market_values::price::Price;
-use pecunia::market_values::unit_value::UnitValue;
+use pecunia::price::Price;
+use pecunia::primitives::Percent;
 use serde::{Deserialize, Serialize};
-use stock_market_utils::order::{AuctionType, OrderDirection, OrderStatus, OrderType, OrderTypeExtension, OrderValidity};
+use stock_market_utils::order::{AuctionType, OrderDirection, OrderStatus, OrderType, OrderTypeExtension};
 
 use crate::deposit::ComdirectDeposit;
 use crate::instrument::InstrumentId;
 use crate::market_place::MarketPlaceId;
-use pecunia::iso_codes::units::NotAUnit;
 
 new_type_ids!(
     pub struct OrderId
@@ -59,9 +55,13 @@ pub struct RawSingleOrder {
     #[serde(rename = "side")]
     #[serde(with = "crate::serde::order_direction")]
     direction: OrderDirection,
-    #[serde(flatten)]
-    #[serde(with = "crate::serde::order_validity")]
-    validity: OrderValidity,
+    // FIXME: #[serde(flatten)] and #[serde(default)] conflict in the current serde version 
+    // github issue: https://github.com/serde-rs/serde/issues/1626
+    // therefore this will fail for any order without an explicit order validity
+    // #[serde(flatten)]
+    // #[serde(default = "order_validity_default")]
+    // #[serde(with = "crate::serde::order_validity")]
+    // validity: OrderValidity,
     #[serde(default)]
     #[serde(rename = "tradingRestriction")]
     #[serde(with = "crate::serde::auction_type")]
@@ -70,26 +70,45 @@ pub struct RawSingleOrder {
     #[serde(with = "crate::serde::order_status")]
     status: OrderStatus,
 
-    limit: Option<UnitValue<Currency, Price>>,
-    trigger_limit: Option<UnitValue<Currency, Price>>,
+    #[serde(default)]
+    #[serde(with = "crate::serde::amount_value::price::option")]
+    limit: Option<Price>,
+    #[serde(default)]
+    #[serde(with = "crate::serde::amount_value::price::option")]
+    trigger_limit: Option<Price>,
+    #[serde(default)]
     #[serde(rename = "trailingLimitDistAbs")]
-    absolute_trailing_limit: Option<UnitValue<Currency, Price>>,
+    #[serde(with = "crate::serde::amount_value::price::option")]
+    absolute_trailing_limit: Option<Price>,
     #[serde(rename = "trailingLimitDistRel")]
     relative_trailing_limit: Option<Percent>,
     #[serde(rename = "creationTimestamp")]
-    #[serde(with = "crate::serde::date_time::mifid2")]
+    #[serde(with = "crate::serde::date::time_stamp_string_utc")]
     time: DateTime<Utc>,
+    #[serde(default)]
     #[serde(rename = "bestEx")]
     best_execution: bool,
 
-    quantity: UnitValue<NotAUnit, F64>,
+    /// even though the quantity most of the time is just an amount with no currency (NotACurrency), there are cases,
+    /// where the quantity is represented by a valid price. This happens when for savings plan (These orders are 
+    /// expected to buy a variable amount of stocks for a fixed price) order or partially executed orders.
+    #[serde(with = "crate::serde::amount_value::price")]
+    quantity: Price,
+    /// for explanation, why this is a price, see [quantity](RawSingleOrder::quantity)
+    #[serde(default)]
     #[serde(rename = "openQuantity")]
-    open: Option<UnitValue<NotAUnit, F64>>,
+    #[serde(with = "crate::serde::amount_value::price::option")]
+    open: Option<Price>,
+    /// for explanation, why this is a price, see [quantity](RawSingleOrder::quantity)
+    #[serde(default)]
     #[serde(rename = "cancelledQuantity")]
-    canceled: Option<UnitValue<NotAUnit, F64>>,
+    #[serde(with = "crate::serde::amount_value::price::option")]
+    canceled: Option<Price>,
+    /// for explanation, why this is a price, see [quantity](RawSingleOrder::quantity)
+    #[serde(default)]
     #[serde(rename = "executedQuantity")]
-    executed: Option<UnitValue<NotAUnit, F64>>,
-
+    #[serde(with = "crate::serde::amount_value::price::option")]
+    executed: Option<Price>,
     executions: Vec<Execution>,
 }
 
@@ -100,9 +119,12 @@ pub struct Execution {
     /// indicates the chronological rank in which this [`Execution`] was done relative
     /// to other executions of the same [`Order`]
     rank: u64,
-    quantity: F64,
-    price: UnitValue<Currency, Price>,
-    #[serde(with = "crate::serde::date_time::mifid2")]
+    /// for explanation, why this is a price, see [RawSingleOrder::quantity](RawSingleOrder::quantity)
+    #[serde(with = "crate::serde::amount_value::price")]
+    quantity: Price,
+    #[serde(with = "crate::serde::amount_value::price")]
+    price: Price,
+    #[serde(with = "crate::serde::date::time_stamp_string_utc")]
     time: DateTime<Utc>,
 }
 
@@ -111,8 +133,13 @@ pub enum ComdirectOrderValidityType {
     #[serde(rename = "GFD")]
     GoodForDay,
     #[serde(rename = "GTD")]
-    GoodTillDate
+    GoodTillDate,
 }
+
+// FIXME: function is ok, but currently unused (see RawSingleOrder.validity) 
+// fn order_validity_default() -> OrderValidity {
+//     OrderValidity::OneDay
+// }
 
 #[derive(Clone, Debug, Default, Serialize, PartialEq, getset::Setters)]
 #[getset(set = "pub")]
@@ -128,6 +155,12 @@ pub struct OrderFilterParameters {
     #[serde(default)]
     #[serde(with = "crate::serde::order_type::option")]
     order_type: Option<OrderType>,
+}
+
+impl OrderId {
+    pub fn new_unchecked(value: String) -> Self {
+        Self(value)
+    }
 }
 
 impl<'d> ComdirectOrder<'d> {

@@ -1,7 +1,5 @@
 use chrono::NaiveDate;
-use pecunia::iso_codes::units::currency::Currency;
-use pecunia::market_values::price::Price;
-use pecunia::market_values::unit_value::UnitValue;
+use pecunia::price::Price;
 use serde::{Deserialize, Serialize};
 use stock_market_utils::derivative::{ISIN, WKN};
 
@@ -26,10 +24,11 @@ pub struct RawTransaction {
     #[serde(rename = "bookingStatus")]
     status: BookingStatus,
     #[serde(rename = "bookingDate")]
-    #[serde(with = "crate::serde::naive_date")]
+    #[serde(with = "crate::serde::date::date_string")]
     date: NaiveDate,
     #[serde(rename = "transactionValue")]
-    value: UnitValue<Currency, Price>,
+    #[serde(with = "crate::serde::amount_value::price")]
+    value: Price,
     #[serde(rename = "transactionDirection")]
     direction: TransactionDirection,
     transaction_type: TransactionType,
@@ -71,8 +70,8 @@ pub struct TransactionFilterParameters<'a> {
     transaction_direction: Option<TransactionDirection>,
     transaction_type: Option<TransactionType>,
     booking_status: Option<BookingStatus>,
-    min_transaction_value: Option<UnitValue<Currency, Price>>,
-    max_transaction_value: Option<UnitValue<Currency, Price>>,
+    min_transaction_value: Option<Price>,
+    max_transaction_value: Option<Price>,
 }
 
 impl<'d> Transaction<'d> {

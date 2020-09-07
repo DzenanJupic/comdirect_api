@@ -1,4 +1,4 @@
-use pecunia::iso_codes::units::currency::Currency;
+use pecunia::units::currency::Currency;
 use serde::Deserialize;
 use stock_market_utils::derivative::{Derivative, ISIN, SYMBOL, WKN};
 
@@ -7,7 +7,8 @@ new_type_ids!(
     pub struct InstrumentName
 );
 
-#[derive(Clone, Debug, Deserialize, PartialEq)]
+#[derive(Clone, Debug, Deserialize, PartialEq, getset::Getters)]
+#[getset(get = "pub")]
 #[serde(rename_all = "camelCase")]
 pub struct Instrument {
     #[serde(rename = "instrumentId")]
@@ -22,7 +23,8 @@ pub struct Instrument {
     fund_data: Option<FundData>,
 }
 
-#[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
+#[derive(Clone, Debug, Deserialize, PartialEq, Eq, getset::Getters)]
+#[getset(get = "pub")]
 #[serde(rename_all = "camelCase")]
 pub struct StaticInstrumentData {
     instrument_type: InstrumentType,

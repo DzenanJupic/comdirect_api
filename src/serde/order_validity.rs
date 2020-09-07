@@ -1,7 +1,7 @@
-use stock_market_utils::order::OrderValidity;
-use serde::{Serialize, Deserialize};
-use pecunia::{serde_with, serde_option};
 use chrono::NaiveDate;
+use pecunia::{serde_option, serde_with};
+use serde::{Deserialize, Serialize};
+use stock_market_utils::order::OrderValidity;
 
 #[derive(Serialize, Deserialize)]
 #[serde(remote = "OrderValidity")]
@@ -27,5 +27,7 @@ serde_with!(Deserializer for OrderValidity as pub(crate) OrderValidityDeserializ
 
 pub(crate) mod option {
     use super::*;
+
     serde_option!(serialize OrderValidity as pub(crate) OrderValidityOptionSerializer with OrderValiditySerializer);
+    serde_option!(deserialize OrderValidity as pub(crate) OrderValidityOptionDeserializer with OrderValidityDeserializer);
 }

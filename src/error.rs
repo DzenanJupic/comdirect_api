@@ -29,7 +29,7 @@ impl From<()> for Error {
 impl From<reqwest::Error> for Error {
     fn from(error: reqwest::Error) -> Self {
         #[cfg(any(test, feature = "test"))]
-        eprintln!("reqwest Error: `{}`", error);
+        println!("reqwest Error: `{}`", error);
         match error.status() {
             Some(StatusCode::NOT_FOUND) => Self::NotFound,
             Some(StatusCode::UNPROCESSABLE_ENTITY) => Self::UnprocessedRequest,
@@ -41,7 +41,8 @@ impl From<reqwest::Error> for Error {
 }
 
 impl From<serde_json::Error> for Error {
-    fn from(_: serde_json::Error) -> Self {
+    fn from(e: serde_json::Error) -> Self {
+        println!("serde error: {}", e);
         Self::UnexpectedJsonValues
     }
 }

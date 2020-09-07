@@ -13,14 +13,14 @@ use stock_market_utils::derivative::Derivative;
 use crate::deposit::ComdirectDeposit;
 use crate::error::Error;
 use crate::instrument::Instrument;
-use crate::market_place::{MarketPlace, OrderDimensionsFilterParameters, JsonResponseMarketplaces};
+use crate::market_place::{JsonResponseMarketplaces, MarketPlace, MarketPlaceFilterParameters};
 use crate::order::{ComdirectOrder, OrderFilterParameters, OrderId, RawOrder};
+use crate::order_outline::ComdirectOrderOutline;
 use crate::position::{Position, PositionId, RawPosition};
 use crate::serde::JsonResponseValues;
 use crate::session::{GrantType, PreSession, Session, SessionId, SessionStatus};
 use crate::tan::{TanChallenge, TanChallengeType};
 use crate::transaction::{RawTransaction, Transaction, TransactionFilterParameters};
-use crate::order_outline::ComdirectOrderOutline;
 
 const HEX_CHARSET: &[u8] = b"0123456789abcdef";
 
@@ -46,6 +46,18 @@ macro_rules! session_is_active {
         match $session {
             Some(ref session) => session,
             None => return Err(Error::NoActiveSession)
+        }
+    };
+}
+
+macro_rules! session_request_method {
+    ($method_name:ident, $method:ident) => {
+        #[inline(always)]
+        fn $method_name(&self, url: &str, session: &Session) -> RequestBuilder {
+            self.client
+                .$method(url)
+                .bearer_auth(&session.access_token)
+                .header("x-http-request-info", self.make_request_info(&session.session_id))
         }
     };
 }
@@ -257,7 +269,6 @@ impl Comdirect {
         Ok(tan_challenge)
     }
 
-    //noinspection RsMatchCheck
     fn activate_tan(&self, session: &Session, tan_challenge: TanChallenge) -> Result<(), Error> {
         #[cfg(any(test, feature = "test"))]
             std::thread::sleep(std::time::Duration::from_secs(10));
@@ -365,20 +376,34 @@ impl Comdirect {
 
     pub fn update_position(&self, position: &mut Position) -> Result<(), Error> {
         // todo: do not deserialize the whole position (id, ...) twice but deserialize just the changed information
+        // use DeserializeSeeded 
         let new_position = self.get_position(position.deposit(), position.raw().id())?;
         position.set_raw(new_position.into_raw());
 
         Ok(())
     }
 
-    pub fn get_deposit_transactions<'d>(&self, deposit: &'d ComdirectDeposit, filter_parameters: &TransactionFilterParameters) -> Result<Vec<Transaction<'d>>, Error> {
+    #[inline(always)]
+    pub fn get_deposit_transactions<'d>(&self, deposit: &'d ComdirectDeposit) -> Result<Vec<Transaction<'d>>, Error> {
+        self._get_deposit_transactions(deposit, None)
+    }
+
+    #[inline(always)]
+    pub fn get_deposit_transactions_filtered<'d>(&self, deposit: &'d ComdirectDeposit, filter_parameters: &TransactionFilterParameters) -> Result<Vec<Transaction<'d>>, Error> {
+        self._get_deposit_transactions(deposit, Some(filter_parameters))
+    }
+
+    fn _get_deposit_transactions<'d>(&self, deposit: &'d ComdirectDeposit, filter_parameters: Option<&TransactionFilterParameters>) -> Result<Vec<Transaction<'d>>, Error> {
         let session = session_is_active!(self.session);
         let url = format!("{}/{}/transactions", url!("/brokerage/v3/depots"), deposit.id());
 
-        let response = self.make_get_session_request(&url, session)
-            .query(&[("without-attr", "instrument")])
-            .query(filter_parameters)
-            .send()?;
+        let mut request = self.make_get_session_request(&url, session)
+            .query(&[("without-attr", "instrument")]);
+        if let Some(filters) = filter_parameters {
+            request = request.query(filters);
+        }
+
+        let response = request.send()?;
         response_is_success!(response);
 
         let json = response.json::<JsonResponseValues<RawTransaction>>()?;
@@ -407,26 +432,52 @@ impl Comdirect {
         Ok(json.values)
     }
 
-    pub fn get_marketplaces(&self, filter_parameters: &OrderDimensionsFilterParameters) -> Result<Vec<MarketPlace>, Error> {
+    #[inline(always)]
+    pub fn get_marketplaces(&self) -> Result<Vec<MarketPlace>, Error> {
+        self._get_marketplaces(None)
+    }
+
+    #[inline(always)]
+    pub fn get_marketplaces_filtered(&self, filter_parameters: &MarketPlaceFilterParameters) -> Result<Vec<MarketPlace>, Error> {
+        self._get_marketplaces(Some(filter_parameters))
+    }
+
+    fn _get_marketplaces(&self, filter_parameters: Option<&MarketPlaceFilterParameters>) -> Result<Vec<MarketPlace>, Error> {
         const URL: &str = url!("/brokerage/v3/orders/dimensions");
         let session = session_is_active!(self.session);
 
-        let response = self.make_get_session_request(URL, session)
-            .query(filter_parameters)
-            .send()?;
+        let mut request = self.make_get_session_request(URL, session);
+        if let Some(filters) = filter_parameters {
+            request = request.query(filters)
+        }
+
+        let response = request.send()?;
         response_is_success!(response);
 
         let json = response.json::<JsonResponseMarketplaces>()?;
         Ok(json.market_places())
     }
 
-    pub fn get_orders<'d>(&self, deposit: &'d ComdirectDeposit, filter_parameters: &OrderFilterParameters) -> Result<Vec<ComdirectOrder<'d>>, Error> {
+    #[inline(always)]
+    pub fn get_orders<'d>(&self, deposit: &'d ComdirectDeposit) -> Result<Vec<ComdirectOrder<'d>>, Error> {
+        self._get_orders(deposit, None)
+    }
+
+    #[inline(always)]
+    pub fn get_orders_filtered<'d>(&self, deposit: &'d ComdirectDeposit, filter_parameters: &OrderFilterParameters) -> Result<Vec<ComdirectOrder<'d>>, Error> {
+        self._get_orders(deposit, Some(filter_parameters))
+    }
+
+    fn _get_orders<'d>(&self, deposit: &'d ComdirectDeposit, filter_parameters: Option<&OrderFilterParameters>) -> Result<Vec<ComdirectOrder<'d>>, Error> {
         let session = session_is_active!(&self.session);
         let url = format!("{}/{}/v3/orders", url!("/brokerage/depots"), deposit.id());
 
-        let response = self.make_get_session_request(&url, session)
-            .query(filter_parameters)
-            .send()?;
+        let mut request = self.make_get_session_request(&url, session);
+        if let Some(filters) = filter_parameters {
+            request = request.query(filters);
+        }
+
+        let response = request.send()?;
         response_is_success!(response);
 
         let json = response.json::<JsonResponseValues<RawOrder>>()?;
@@ -455,17 +506,11 @@ impl Comdirect {
         const URL: &str = url!("/brokerage/v3/orders/prevalidation");
         let session = session_is_active!(self.session);
 
-        let request = self.make_post_session_request(URL, session)
+        let response = self.make_post_session_request(URL, session)
             .json(order_outline)
-            .build().unwrap();
-
-        let response = self.client.execute(request)?;
-
-        // println!("request: {}", String::from_utf8_lossy(request.body().unwrap().as_bytes().unwrap()));
-        // let response
+            .send()?;
         response_is_success!(response);
 
-        println!("\n\nvalidation response: {}", response.text().unwrap());
         Ok(())
     }
 
@@ -492,17 +537,6 @@ impl Comdirect {
         )
     }
 
-    fn make_get_session_request(&self, url: &str, session: &Session) -> RequestBuilder {
-        self.client
-            .get(url)
-            .bearer_auth(&session.access_token)
-            .header("x-http-request-info", self.make_request_info(&session.session_id))
-    }
-
-    fn make_post_session_request(&self, url: &str, session: &Session) -> RequestBuilder {
-        self.client
-            .post(url)
-            .bearer_auth(&session.access_token)
-            .header("x-http-request-info", self.make_request_info(&session.session_id))
-    }
+    session_request_method!(make_get_session_request, get);
+    session_request_method!(make_post_session_request, post);
 }

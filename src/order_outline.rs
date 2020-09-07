@@ -1,11 +1,8 @@
 use derive_builder::Builder;
-use pecunia::iso_codes::units::currency::Currency;
-use pecunia::iso_codes::units::NotAUnit;
-use pecunia::market_values::f64::F64;
-use pecunia::market_values::percent::Percent;
-use pecunia::market_values::price::Price;
-use pecunia::market_values::unit_value::UnitValue;
 use getset::{Getters, Setters};
+use pecunia::price::Price;
+use pecunia::primitives::F64;
+use pecunia::primitives::Percent;
 use serde::Serialize;
 use stock_market_utils::order::{AuctionType, OrderDirection, OrderType, OrderTypeExtension, OrderValidity};
 
@@ -69,14 +66,14 @@ pub struct RawSingleOrderOutline<'d, 'i, 'm> {
 
     #[builder(default)]
     #[serde(skip_serializing_if = "Option::is_none")]
-    limit: Option<UnitValue<Currency, Price>>,
+    limit: Option<Price>,
     #[builder(default)]
     #[serde(skip_serializing_if = "Option::is_none")]
-    trigger_limit: Option<UnitValue<Currency, Price>>,
+    trigger_limit: Option<Price>,
     #[builder(default)]
     #[serde(rename = "trailingLimitDistAbs")]
     #[serde(skip_serializing_if = "Option::is_none")]
-    absolute_trailing_limit: Option<UnitValue<Currency, Price>>,
+    absolute_trailing_limit: Option<Price>,
     #[builder(default)]
     #[serde(rename = "trailingLimitDistRel")]
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -85,7 +82,8 @@ pub struct RawSingleOrderOutline<'d, 'i, 'm> {
     #[serde(rename = "bestEx")]
     best_execution: bool,
 
-    quantity: UnitValue<NotAUnit, F64>,
+    #[serde(with = "crate::serde::amount_value::quantity")]
+    quantity: F64,
 }
 
 impl RawCombinationOrderOutline<'_, '_, '_> {

@@ -4,15 +4,13 @@ use std::sync::Arc;
 use std::thread::sleep;
 use std::time::Duration;
 
-use pecunia::iso_codes::units::NotAUnit;
-use pecunia::market_values::f64::F64;
-use pecunia::market_values::unit_value::UnitValue;
 use lazy_static::lazy_static;
+use pecunia::primitives::F64;
 use stock_market_utils::derivative::{Derivative, ISIN, SYMBOL, WKN};
 
 use comdirect_api::api_interface::Comdirect;
 use comdirect_api::instrument::InstrumentId;
-use comdirect_api::market_place::OrderDimensionsFilterParameters;
+use comdirect_api::market_place::MarketPlaceFilterParameters;
 use comdirect_api::order::OrderFilterParameters;
 use comdirect_api::order_outline::{ComdirectOrderOutline, RawSingleOrderOutline};
 use comdirect_api::transaction::TransactionFilterParameters;
@@ -62,14 +60,12 @@ fn session() {
 }
 
 #[test]
-#[ignore]
 fn get_deposits() {
     let deposits = SESSION.get_deposits().unwrap();
     println!("\n\ndeposits: {:#?}", deposits);
 }
 
 #[test]
-#[ignore]
 fn get_deposit_positions() {
     let deposits = SESSION.get_deposits().unwrap();
     let positions = SESSION.get_positions(&deposits[0]).unwrap();
@@ -77,7 +73,6 @@ fn get_deposit_positions() {
 }
 
 #[test]
-#[ignore]
 fn update_position() {
     let deposits = SESSION.get_deposits().unwrap();
     let mut positions = SESSION.get_positions(&deposits[0]).unwrap();
@@ -89,18 +84,13 @@ fn update_position() {
 }
 
 #[test]
-#[ignore]
 fn get_deposit_transactions() {
     let deposits = SESSION.get_deposits().unwrap();
-    let transactions = SESSION.get_deposit_transactions(
-        &deposits[0],
-        &TransactionFilterParameters::default(),
-    ).unwrap();
+    let transactions = SESSION.get_deposit_transactions(&deposits[0]).unwrap();
     println!("\n\ntransactions: {:#?}", transactions);
 }
 
 #[test]
-#[ignore]
 fn get_deposit_filtered_transactions() {
     let deposits = SESSION.get_deposits().unwrap();
     let positions = SESSION.get_positions(&deposits[0]).unwrap();
@@ -108,7 +98,7 @@ fn get_deposit_filtered_transactions() {
     let parameters = TransactionFilterParameters::default()
         .set_position_wkn(&positions[0]);
 
-    let transactions = SESSION.get_deposit_transactions(
+    let transactions = SESSION.get_deposit_transactions_filtered(
         &deposits[0],
         &parameters,
     ).unwrap();
@@ -116,7 +106,6 @@ fn get_deposit_filtered_transactions() {
 }
 
 #[test]
-#[ignore]
 fn get_instrument() {
 
     // McDonald's
@@ -138,26 +127,36 @@ fn get_instrument() {
 }
 
 #[test]
-#[ignore]
 fn get_market_places() {
-    let without_parameters = SESSION.get_marketplaces(&OrderDimensionsFilterParameters::default()).unwrap();
-    println!("\n\nmarket places without parameters: {:#?}", without_parameters);
+    let market_places = SESSION.get_marketplaces().unwrap();
+    println!("\n\nall market places: {:#?}", market_places);
 }
 
 #[test]
-#[ignore]
+fn get_market_places_filtered() {
+    let market_places = SESSION.get_marketplaces_filtered(&MarketPlaceFilterParameters::default()).unwrap();
+    println!("\n\nmarket places filtered (default): {:#?}", market_places);
+}
+
+#[test]
 fn get_orders() {
     let deposits = SESSION.get_deposits().unwrap();
-    let without_parameters = SESSION.get_orders(&deposits[0], &OrderFilterParameters::default()).unwrap();
-    println!("\n\norders without parameters: {:#?}", without_parameters);
+    let orders = SESSION.get_orders(&deposits[0]).unwrap();
+    println!("\n\nall orders: {:#?}", orders);
 }
 
 #[test]
-#[ignore]
+fn get_orders_filtered() {
+    let deposits = SESSION.get_deposits().unwrap();
+    let orders = SESSION.get_orders_filtered(&deposits[0], &OrderFilterParameters::default()).unwrap();
+    println!("\n\norders filtered (default): {:#?}", orders);
+}
+
+#[test]
 fn get_order() {
     let deposits = SESSION.get_deposits().unwrap();
 
-    let orders = SESSION.get_orders(&deposits[0], &OrderFilterParameters::default()).unwrap();
+    let orders = SESSION.get_orders(&deposits[0]).unwrap();
     if orders.len() == 0 {
         println!("\n\nNo orders found");
         return;
@@ -170,23 +169,20 @@ fn get_order() {
 }
 
 #[test]
-fn pre_validate_default_order_outline() {
-    // let order_outline = ComdirectOrderOutline::build();
-    // SESSION.pre_validate_order(&order_outline).unwrap();
-    unimplemented!()
-}
-
-#[test]
 fn pre_validate_order_outline() {
     let deposits = SESSION.get_deposits().unwrap();
-    let market_places = SESSION.get_marketplaces(&OrderDimensionsFilterParameters::default()).unwrap();
-    let mc_donald_s = InstrumentId::from(Derivative::ISIN(ISIN::try_from("US5801351017").unwrap()));
+    let mc_donalds_isin = ISIN::try_from("US0079031078").unwrap();
+    let mc_donalds = InstrumentId::from(Derivative::isin_from_str("US0079031078").unwrap());
+    let filter_parameters = MarketPlaceFilterParameters::builder()
+        .isin(&mc_donalds_isin)
+        .build().unwrap();
+    let market_places = SESSION.get_marketplaces_filtered(&filter_parameters).unwrap();
 
     let order_outline = RawSingleOrderOutline::builder()
         .deposit_id(deposits[0].id())
-        .market_place_id(market_places[0].id())
-        .instrument_id(&mc_donald_s)
-        .quantity(UnitValue::new(F64::new(1.0), NotAUnit))
+        .market_place_id(market_places[1].id())
+        .instrument_id(&mc_donalds)
+        .quantity(F64::new(1.0))
         .build()
         .unwrap();
 

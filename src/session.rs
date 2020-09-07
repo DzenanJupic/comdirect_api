@@ -22,7 +22,7 @@ pub(crate) struct PreSession {
     pub(crate) access_token: AccessToken,
     pub(crate) refresh_token: RefreshToken,
     #[serde(rename = "expires_in")]
-    #[serde(with = "crate::serde::date_time::seconds")]
+    #[serde(with = "crate::serde::date::seconds")]
     pub(crate) expires_at: DateTime<Local>,
 }
 
