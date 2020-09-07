@@ -5,13 +5,16 @@ use std::thread::sleep;
 use std::time::Duration;
 
 use lazy_static::lazy_static;
+use pecunia::price::Price;
 use pecunia::primitives::F64;
+use pecunia::units::currency::Currency;
 use stock_market_utils::derivative::{Derivative, ISIN, SYMBOL, WKN};
+use stock_market_utils::order::OrderType;
 
 use comdirect_api::api_interface::Comdirect;
 use comdirect_api::instrument::InstrumentId;
 use comdirect_api::market_place::MarketPlaceFilterParameters;
-use comdirect_api::order::OrderFilterParameters;
+use comdirect_api::order::{ComdirectOrder, OrderFilterParameters};
 use comdirect_api::order_outline::{ComdirectOrderOutline, RawSingleOrderOutline};
 use comdirect_api::transaction::TransactionFilterParameters;
 
@@ -171,17 +174,19 @@ fn get_order() {
 #[test]
 fn pre_validate_order_outline() {
     let deposits = SESSION.get_deposits().unwrap();
-    let mc_donalds_isin = ISIN::try_from("US0079031078").unwrap();
-    let mc_donalds = InstrumentId::from(Derivative::isin_from_str("US0079031078").unwrap());
+    let amd_isin = ISIN::try_from("US0079031078").unwrap();
+    let amd = InstrumentId::from(Derivative::isin_from_str("US0079031078").unwrap());
     let filter_parameters = MarketPlaceFilterParameters::builder()
-        .isin(&mc_donalds_isin)
+        .isin(&amd_isin)
         .build().unwrap();
     let market_places = SESSION.get_marketplaces_filtered(&filter_parameters).unwrap();
 
     let order_outline = RawSingleOrderOutline::builder()
-        .deposit_id(deposits[0].id())
+        .deposit(&deposits[0])
+        .order_type(OrderType::Limit)
+        .limit(Price::new(10.0, Currency::EUR))
         .market_place_id(market_places[1].id())
-        .instrument_id(&mc_donalds)
+        .instrument_id(&amd)
         .quantity(F64::new(1.0))
         .build()
         .unwrap();
@@ -191,24 +196,52 @@ fn pre_validate_order_outline() {
 }
 
 #[test]
-fn validate_order_outline() {
+#[ignore]
+fn order_cost_indication() {
     let deposits = SESSION.get_deposits().unwrap();
-    let mc_donalds_isin = ISIN::try_from("US0079031078").unwrap();
-    let mc_donalds = InstrumentId::from(Derivative::isin_from_str("US0079031078").unwrap());
+    let amd_isin = ISIN::try_from("US0079031078").unwrap();
+    let amd = InstrumentId::from(Derivative::isin_from_str("US0079031078").unwrap());
     let filter_parameters = MarketPlaceFilterParameters::builder()
-        .isin(&mc_donalds_isin)
+        .isin(&amd_isin)
         .build().unwrap();
     let market_places = SESSION.get_marketplaces_filtered(&filter_parameters).unwrap();
 
     let order_outline = RawSingleOrderOutline::builder()
-        .deposit_id(deposits[0].id())
+        .deposit(&deposits[0])
         .market_place_id(market_places[1].id())
-        .instrument_id(&mc_donalds)
+        .instrument_id(&amd)
         .quantity(F64::new(1.0))
         .build()
         .unwrap();
 
     let order_outline = ComdirectOrderOutline::SingleOrder(order_outline);
     SESSION.pre_validate_order_outline(&order_outline).unwrap();
-    SESSION.validate_order_outline(&order_outline).unwrap();
+    SESSION.order_cost_indication(&order_outline).unwrap();
+}
+
+#[test]
+fn place_order() {
+    let deposits = SESSION.get_deposits().unwrap();
+    let amd_isin = ISIN::try_from("US0079031078").unwrap();
+    let amd = InstrumentId::from(Derivative::isin_from_str("US0079031078").unwrap());
+    let filter_parameters = MarketPlaceFilterParameters::builder()
+        .isin(&amd_isin)
+        .build().unwrap();
+    let market_places = SESSION.get_marketplaces_filtered(&filter_parameters).unwrap();
+
+    let order_outline = RawSingleOrderOutline::builder()
+        .deposit(&deposits[0])
+        .order_type(OrderType::Limit)
+        .limit(Price::new(10.0, Currency::EUR))
+        .market_place_id(market_places[1].id())
+        .instrument_id(&amd)
+        .quantity(F64::new(1.0))
+        .build()
+        .unwrap();
+
+    let order_outline = ComdirectOrderOutline::SingleOrder(order_outline);
+    SESSION.pre_validate_order_outline(&order_outline).unwrap();
+    let order = SESSION.place_order(&order_outline).unwrap();
+    println!("order: {:?}", order);
+    let _: ComdirectOrder = SESSION.get_order(&deposits[0], order.id()).unwrap();
 }

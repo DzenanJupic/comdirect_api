@@ -18,7 +18,6 @@ pub(crate) mod quantity {
 
     use super::AmountValue;
 
-    #[allow(unused)]
     pub(crate) fn serialize<S>(&value: &F64, serializer: S) -> Result<S::Ok, S::Error>
         where S: Serializer {
         AmountValue { value, unit: NotAUnit }.serialize(serializer)
@@ -27,6 +26,7 @@ pub(crate) mod quantity {
 
 pub(crate) mod price {
     use pecunia::price::Price;
+    use pecunia::primitive_value::PrimitiveValue;
     use pecunia::primitives::RawPrice;
     use pecunia::serde_with;
     use pecunia::units::currency::Currency;
@@ -37,6 +37,7 @@ pub(crate) mod price {
     struct PriceDef {
         #[serde(rename = "value")]
         #[serde(getter = "Price::raw_price")]
+        #[serde(serialize_with = "PrimitiveValue::serialize_f64_str")]
         raw_price: RawPrice,
         #[serde(rename = "unit")]
         #[serde(getter = "Price::currency")]
@@ -49,6 +50,7 @@ pub(crate) mod price {
         }
     }
 
+    serde_with!(Serializer for Price as pub(crate) PriceSerializer with "PriceDef");
     serde_with!(Deserializer for Price as pub(crate) PriceDeserializer with "PriceDef");
 
     pub(crate) mod option {
@@ -56,6 +58,7 @@ pub(crate) mod price {
 
         use super::*;
 
+        serde_option!(serialize Price as pub(crate) PriceOptionSerializer with PriceSerializer);
         serde_option!(deserialize Price as pub(crate) PriceOptionDeserializer with PriceDeserializer);
     }
 }

@@ -289,7 +289,7 @@ impl Comdirect {
             };
 
         let url = format!("{}/{}", url!("/session/clients/user/v1/sessions"), session.session_uuid.as_str());
-        let tan_id = format!(r#"{{"id":"{}"}}"#, tan_challenge.id().as_str());
+        let tan_header = Comdirect::make_x_authentication_info_header(&tan_challenge);
         let data = format!(
             r#"{{
                 "identifier": "{}",
@@ -303,7 +303,7 @@ impl Comdirect {
             .patch(&url)
             .bearer_auth(&session.access_token)
             .header("x-http-request-info", self.make_request_info(&session.session_id))
-            .header("x-once-authentication-info", tan_id)
+            .header(tan_header.0, tan_header.1)
             .body(data);
 
         match tan_challenge.typ() {
@@ -497,6 +497,24 @@ impl Comdirect {
         Ok(ComdirectOrder::from_raw(raw, deposit))
     }
 
+    pub fn order_cost_indication(&self, order_outline: &ComdirectOrderOutline) -> Result<(), Error> {
+        const URL: &str = url!("/brokerage/v3/orders/costindicationexante");
+        let session = session_is_active!(self.session);
+
+        let response = self.make_post_session_request(URL, session)
+            .json(order_outline)
+            .send()?;
+        response_is_success!(response);
+
+        println!("headers: {:?}", response.headers());
+        println!("body: {:?}", response.text().unwrap());
+
+        // todo: comdirect documentation 7.2.5
+        unimplemented!("deserialization of CostIndications is not yet implemented");
+
+        // Ok(())
+    }
+
     pub fn pre_validate_order_outline(&self, order_outline: &ComdirectOrderOutline) -> Result<(), Error> {
         const URL: &str = url!("/brokerage/v3/orders/prevalidation");
         let session = session_is_active!(self.session);
@@ -513,7 +531,13 @@ impl Comdirect {
         Ok(())
     }
 
-    pub fn validate_order_outline(&self, order_outline: &ComdirectOrderOutline) -> Result<(), Error> {
+    pub fn place_order<'d>(&self, order_outline: &ComdirectOrderOutline<'d, '_, '_>) -> Result<ComdirectOrder<'d>, Error> {
+        let tan_challenge = self.validate_order_outline(order_outline)?;
+        let order = self.place_order_outline(order_outline, tan_challenge)?;
+        Ok(order)
+    }
+
+    fn validate_order_outline(&self, order_outline: &ComdirectOrderOutline) -> Result<TanChallenge, Error> {
         const URL: &str = url!("/brokerage/v3/orders/validation");
         let session = session_is_active!(self.session);
 
@@ -527,7 +551,30 @@ impl Comdirect {
             return Err(Error::UnexpectedTanType);
         }
 
-        Ok(())
+        Ok(tan_challenge)
+    }
+
+    fn place_order_outline<'d>(&self, order_outline: &ComdirectOrderOutline<'d, '_, '_>, tan_challenge: TanChallenge) -> Result<ComdirectOrder<'d>, Error> {
+        const URL: &str = url!("/brokerage/v3/orders");
+        let session = session_is_active!(self.session);
+        let tan_header = Comdirect::make_x_authentication_info_header(&tan_challenge);
+
+        let response = self.make_post_session_request(URL, session)
+            .header(tan_header.0, tan_header.1)
+            .json(order_outline)
+            .send()?;
+        response_is_success!(response);
+
+        let raw_order = response.json::<RawOrder>()?;
+        let order = ComdirectOrder::from_raw(raw_order, order_outline.deposit());
+        Ok(order)
+    }
+
+    pub fn pre_validate_order_change(&self, _order: &ComdirectOrder) -> Result<(), Error> {
+        // todo: create a new UpdateOrder type that holds Option's for each limit and the validity
+        // this will help to make sure, no one can update the ComdirectOrder directly, but only
+        // this function can
+        unimplemented!()
     }
 
     #[inline(always)]
@@ -564,6 +611,11 @@ impl Comdirect {
             .to_str()
             .map_err(|_| Error::UnexpectedResponseHeaders)?;
         Ok(serde_json::from_str(authentication_info)?)
+    }
+
+    #[inline(always)]
+    fn make_x_authentication_info_header(tan_challenge: &TanChallenge) -> (&'static str, String) {
+        ("x-once-authentication-info", format!(r#"{{"id":"{}"}}"#, tan_challenge.id().as_str()))
     }
 
     session_request_method!(make_get_session_request, get);

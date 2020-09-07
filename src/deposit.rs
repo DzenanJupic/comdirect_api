@@ -7,6 +7,11 @@ new_type_ids!(
     pub struct DepositDisplayId
 );
 
+// todo: create a different kind of deposit, that enforces, that every Position and Order is valid
+// this can be done, by creating a DepositPositions and DepositOrders struct (it's important
+// to have one for both, so you can keep references to positions, if you update orders)
+// then store these structs in a Deposit. More thinking needs to be done...
+
 #[derive(Clone, Debug, Serialize, Deserialize, Display, PartialEq, getset::Getters)]
 #[getset(get = "pub")]
 #[display(fmt = "{}", display_id)]

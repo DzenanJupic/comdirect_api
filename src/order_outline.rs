@@ -3,10 +3,10 @@ use getset::{Getters, Setters};
 use pecunia::price::Price;
 use pecunia::primitives::F64;
 use pecunia::primitives::Percent;
-use serde::Serialize;
+use serde::{Serialize, Serializer};
 use stock_market_utils::order::{AuctionType, OrderDirection, OrderType, OrderTypeExtension, OrderValidity};
 
-use crate::deposit::DepositId;
+use crate::deposit::ComdirectDeposit;
 use crate::instrument::InstrumentId;
 use crate::market_place::MarketPlaceId;
 
@@ -32,10 +32,10 @@ pub struct RawCombinationOrderOutline<'d, 'i, 'm> {
 #[getset(set = "pub")]
 #[builder(setter(strip_option))]
 #[serde(rename_all = "camelCase")]
-// todo: try without is_none
 pub struct RawSingleOrderOutline<'d, 'i, 'm> {
     #[serde(rename = "depotId")]
-    deposit_id: &'d DepositId,
+    #[serde(serialize_with = "serialize_deposit_as_id")]
+    deposit: &'d ComdirectDeposit,
     #[serde(skip_serializing_if = "Option::is_none")]
     instrument_id: Option<&'i InstrumentId>,
     #[serde(rename = "venueId")]
@@ -66,13 +66,16 @@ pub struct RawSingleOrderOutline<'d, 'i, 'm> {
 
     #[builder(default)]
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(with = "crate::serde::amount_value::price::option")]
     limit: Option<Price>,
     #[builder(default)]
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(with = "crate::serde::amount_value::price::option")]
     trigger_limit: Option<Price>,
     #[builder(default)]
     #[serde(rename = "trailingLimitDistAbs")]
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(with = "crate::serde::amount_value::price::option")]
     absolute_trailing_limit: Option<Price>,
     #[builder(default)]
     #[serde(rename = "trailingLimitDistRel")]
@@ -86,6 +89,15 @@ pub struct RawSingleOrderOutline<'d, 'i, 'm> {
     quantity: F64,
 }
 
+impl<'d> ComdirectOrderOutline<'d, '_, '_> {
+    pub fn deposit(&self) -> &'d ComdirectDeposit {
+        match self {
+            ComdirectOrderOutline::SingleOrder(order) => order.deposit,
+            ComdirectOrderOutline::CombinationOrder(order) => order.sub_orders.0.deposit
+        }
+    }
+}
+
 impl RawCombinationOrderOutline<'_, '_, '_> {
     pub fn builder<'d, 'i, 'm>() -> RawCombinationOrderOutlineBuilder<'d, 'i, 'm> {
         RawCombinationOrderOutlineBuilder::default()
@@ -96,4 +108,9 @@ impl RawSingleOrderOutline<'_, '_, '_> {
     pub fn builder<'d, 'i, 'm>() -> RawSingleOrderOutlineBuilder<'d, 'i, 'm> {
         RawSingleOrderOutlineBuilder::default()
     }
+}
+
+pub(crate) fn serialize_deposit_as_id<S>(deposit: &ComdirectDeposit, serializer: S) -> Result<S::Ok, S::Error>
+    where S: Serializer {
+    deposit.id().serialize(serializer)
 }

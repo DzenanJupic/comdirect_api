@@ -2,7 +2,7 @@ use chrono::{DateTime, Utc};
 use pecunia::price::Price;
 use pecunia::primitives::Percent;
 use serde::{Deserialize, Serialize};
-use stock_market_utils::order::{AuctionType, OrderDirection, OrderStatus, OrderType, OrderTypeExtension};
+use stock_market_utils::order::{AuctionType, OrderDirection, OrderStatus, OrderType, OrderTypeExtension, OrderValidity};
 
 use crate::deposit::ComdirectDeposit;
 use crate::instrument::InstrumentId;
@@ -58,10 +58,10 @@ pub struct RawSingleOrder {
     // FIXME: #[serde(flatten)] and #[serde(default)] conflict in the current serde version 
     // github issue: https://github.com/serde-rs/serde/issues/1626
     // therefore this will fail for any order without an explicit order validity
-    // #[serde(flatten)]
-    // #[serde(default = "order_validity_default")]
-    // #[serde(with = "crate::serde::order_validity")]
-    // validity: OrderValidity,
+    #[serde(flatten)]
+    #[serde(default = "order_validity_default")]
+    #[serde(with = "crate::serde::order_validity")]
+    validity: OrderValidity,
     #[serde(default)]
     #[serde(rename = "tradingRestriction")]
     #[serde(with = "crate::serde::auction_type")]
@@ -173,6 +173,13 @@ impl<'d> ComdirectOrder<'d> {
     pub fn into_raw(self) -> RawOrder {
         self.raw
     }
+
+    pub fn id(&self) -> &OrderId {
+        match &self.raw {
+            RawOrder::SingleOrder(raw) => &raw.id,
+            RawOrder::CombinationOrder(raw) => &raw.id
+        }
+    }
 }
 
 impl RawOrder {
@@ -181,5 +188,27 @@ impl RawOrder {
             RawOrder::CombinationOrder(raw) => raw.id(),
             RawOrder::SingleOrder(raw) => raw.id()
         }
+    }
+}
+
+macro_rules! update_limit {
+    (fn $method_name:ident, $field:ident) => (update_limit!(fn $method_name, $field: Price););
+    (fn $method_name:ident, $field:ident: $field_ty:ty) => {
+        pub(crate) fn $method_name(&mut self, new_limit: $field_ty) -> Option<$field_ty> {
+            std::mem::replace(&mut self.$field, Some(new_limit))
+        }
+    };
+}
+
+// todo
+#[allow(unused)]
+impl RawSingleOrder {
+    update_limit!(fn update_limit, limit);
+    update_limit!(fn update_trigger_limit, trigger_limit);
+    update_limit!(fn update_absolute_trailing_limit, absolute_trailing_limit);
+    update_limit!(fn update_relative_trailing_limit, relative_trailing_limit: Percent);
+
+    pub(crate) fn update_validity(&mut self, new_validity: OrderValidity) -> OrderValidity {
+        std::mem::replace(&mut self.validity, new_validity)
     }
 }

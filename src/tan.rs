@@ -4,7 +4,7 @@ new_type_ids!(
     pub struct TanChallengeId
 );
 
-#[derive(Clone, Debug, Deserialize, getset::Getters)]
+#[derive(Debug, Deserialize, getset::Getters)]
 #[getset(get = "pub(crate)")]
 pub(crate) struct TanChallenge {
     id: TanChallengeId,
