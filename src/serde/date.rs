@@ -9,7 +9,7 @@
 
 pub(crate) mod date_string {
     use chrono::NaiveDate;
-    use serde::{Deserialize, Deserializer};
+    use serde::{Deserialize, Deserializer, Serialize, Serializer};
     use serde::de::{Error, Unexpected};
 
     const DATE_STRING: &str = "%F";
@@ -21,6 +21,28 @@ pub(crate) mod date_string {
         let date = <&str>::deserialize(deserializer)?;
         NaiveDate::parse_from_str(date, DATE_STRING)
             .map_err(|_| D::Error::invalid_value(Unexpected::Str(date), &HELP_TEXT))
+    }
+
+    pub(crate) fn serialize<S>(date: &NaiveDate, serializer: S) -> Result<S::Ok, S::Error>
+        where
+            S: Serializer {
+        date
+            .format(DATE_STRING)
+            .to_string()
+            .serialize(serializer)
+    }
+
+    pub(crate) mod option {
+        use super::*;
+
+        pub(crate) fn serialize<S>(date: &Option<NaiveDate>, serializer: S) -> Result<S::Ok, S::Error>
+            where
+                S: Serializer {
+            match date {
+                Some(date) => super::serialize(date, serializer),
+                None => Option::<()>::None.serialize(serializer)
+            }
+        }
     }
 }
 

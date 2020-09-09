@@ -65,7 +65,7 @@ pub struct TransactionFilterParameters<'a> {
     isin: Option<&'a ISIN>,
     wkn: Option<&'a WKN>,
     instrument_id: Option<&'a str>,
-    #[serde(with = "crate::serde::naive_date::option")]
+    #[serde(with = "crate::serde::date::date_string::option")]
     max_booking_date: Option<NaiveDate>,
     transaction_direction: Option<TransactionDirection>,
     transaction_type: Option<TransactionType>,

@@ -18,7 +18,7 @@ pub enum OrderValidityDef {
     #[serde(skip)]
     Infinite,
     #[serde(rename = "GTD")]
-    #[serde(with = "crate::serde::naive_date")]
+    #[serde(with = "crate::serde::date::date_string")]
     TillDate(NaiveDate),
 }
 

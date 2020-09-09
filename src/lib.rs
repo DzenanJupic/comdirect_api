@@ -29,6 +29,19 @@ macro_rules! new_type_ids {
     };
 }
 
+macro_rules! option_builder_fn {
+    ($($vis:vis fn $field:ident($field_ty:ty))*) =>
+        (option_builder_fn!($($vis fn $field($field: $field_ty))*););
+    ($($vis:vis fn $method_name:ident($field:ident: $field_ty:ty))*) => {
+        $(
+            $vis fn $method_name(mut self, $field: $field_ty) -> Self {
+                self.$field = Some($field);
+                self
+            }
+        )*
+    };
+}
+
 pub mod api_interface;
 pub mod deposit;
 pub mod error;

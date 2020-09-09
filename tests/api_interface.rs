@@ -11,25 +11,25 @@ use pecunia::units::currency::Currency;
 use stock_market_utils::derivative::{Derivative, ISIN, SYMBOL, WKN};
 use stock_market_utils::order::OrderType;
 
-use comdirect_api::api_interface::Comdirect;
+use comdirect_api::api_interface::ComdirectApi;
 use comdirect_api::instrument::InstrumentId;
 use comdirect_api::market_place::MarketPlaceFilterParameters;
-use comdirect_api::order::{ComdirectOrder, OrderFilterParameters};
+use comdirect_api::order::{ComdirectOrder, OrderChange, OrderFilterParameters};
 use comdirect_api::order_outline::{ComdirectOrderOutline, RawSingleOrderOutline};
 use comdirect_api::transaction::TransactionFilterParameters;
 
 lazy_static! {
-    static ref SESSION: Arc<Comdirect> = Arc::new(comdirect_session().unwrap());
+    static ref SESSION: Arc<ComdirectApi> = Arc::new(comdirect_session().unwrap());
 }
 
-fn comdirect_session() -> Result<Comdirect, Box<dyn Error>> {
+fn comdirect_session() -> Result<ComdirectApi, Box<dyn Error>> {
     let mut comdirect = new_comdirect();
     comdirect.new_session()?;
     Ok(comdirect)
 }
 
-fn new_comdirect() -> Comdirect {
-    Comdirect::new(
+fn new_comdirect() -> ComdirectApi {
+    ComdirectApi::new(
         env!("client_id").to_string().into(),
         env!("client_secret").to_string().into(),
         env!("username").to_string().into(),
@@ -220,6 +220,7 @@ fn order_cost_indication() {
 }
 
 #[test]
+#[ignore]
 fn place_order() {
     let deposits = SESSION.get_deposits().unwrap();
     let amd_isin = ISIN::try_from("US0079031078").unwrap();
@@ -244,4 +245,63 @@ fn place_order() {
     let order = SESSION.place_order(&order_outline).unwrap();
     println!("order: {:?}", order);
     let _: ComdirectOrder = SESSION.get_order(&deposits[0], order.id()).unwrap();
+}
+
+#[test]
+#[ignore]
+fn pre_validate_order_change() {
+    let deposits = SESSION.get_deposits().unwrap();
+    let amd_isin = ISIN::try_from("US0079031078").unwrap();
+    let amd = InstrumentId::from(Derivative::isin_from_str("US0079031078").unwrap());
+    let filter_parameters = MarketPlaceFilterParameters::builder()
+        .isin(&amd_isin)
+        .build().unwrap();
+    let market_places = SESSION.get_marketplaces_filtered(&filter_parameters).unwrap();
+
+    let order_outline = RawSingleOrderOutline::builder()
+        .deposit(&deposits[0])
+        .order_type(OrderType::Limit)
+        .limit(Price::new(10.0, Currency::EUR))
+        .market_place_id(market_places[1].id())
+        .instrument_id(&amd)
+        .quantity(F64::new(1.0))
+        .build()
+        .unwrap();
+
+    let order_outline = ComdirectOrderOutline::SingleOrder(order_outline);
+    SESSION.pre_validate_order_outline(&order_outline).unwrap();
+    let mut order = SESSION.place_order(&order_outline).unwrap();
+
+    let order_change = OrderChange::from_order0(&mut order)
+        .limit(Price::new(5.0, Currency::EUR));
+
+    SESSION.pre_validate_order_change(&order_change).unwrap();
+}
+
+#[test]
+#[ignore]
+fn pre_validate_order_deletion() {
+    let deposits = SESSION.get_deposits().unwrap();
+    let amd_isin = ISIN::try_from("US0079031078").unwrap();
+    let amd = InstrumentId::from(Derivative::isin_from_str("US0079031078").unwrap());
+    let filter_parameters = MarketPlaceFilterParameters::builder()
+        .isin(&amd_isin)
+        .build().unwrap();
+    let market_places = SESSION.get_marketplaces_filtered(&filter_parameters).unwrap();
+
+    let order_outline = RawSingleOrderOutline::builder()
+        .deposit(&deposits[0])
+        .order_type(OrderType::Limit)
+        .limit(Price::new(10.0, Currency::EUR))
+        .market_place_id(market_places[1].id())
+        .instrument_id(&amd)
+        .quantity(F64::new(1.0))
+        .build()
+        .unwrap();
+
+    let order_outline = ComdirectOrderOutline::SingleOrder(order_outline);
+    SESSION.pre_validate_order_outline(&order_outline).unwrap();
+    let order = SESSION.place_order(&order_outline).unwrap();
+
+    SESSION.pre_validate_order_deletion(&order).unwrap();
 }

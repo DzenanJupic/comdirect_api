@@ -18,7 +18,7 @@ pub enum Error {
     ResponseClientError,
     ResponseServerError,
     NotFound,
-    UnprocessedRequest,
+    UnprocessableRequest,
 
     NotSupported,
     IOError,
@@ -33,10 +33,10 @@ impl From<()> for Error {
 impl From<reqwest::Error> for Error {
     fn from(error: reqwest::Error) -> Self {
         #[cfg(any(test, feature = "test"))]
-        println!("reqwest Error: `{}`", error);
+        dbg!(&error);
         match error.status() {
             Some(StatusCode::NOT_FOUND) => Self::NotFound,
-            Some(StatusCode::UNPROCESSABLE_ENTITY) => Self::UnprocessedRequest,
+            Some(StatusCode::UNPROCESSABLE_ENTITY) => Self::UnprocessableRequest,
             Some(s) if s.is_client_error() => Self::ResponseClientError,
             Some(s) if s.is_server_error() => Self::ResponseServerError,
             _ => Self::Other

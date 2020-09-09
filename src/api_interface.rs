@@ -8,13 +8,14 @@ use reqwest::{
 };
 use reqwest::blocking::RequestBuilder;
 use reqwest::header::{HeaderMap, HeaderValue};
+use reqwest::IntoUrl;
 use stock_market_utils::derivative::Derivative;
 
 use crate::deposit::ComdirectDeposit;
 use crate::error::Error;
 use crate::instrument::Instrument;
 use crate::market_place::{JsonResponseMarketplaces, MarketPlace, MarketPlaceFilterParameters};
-use crate::order::{ComdirectOrder, OrderFilterParameters, OrderId, RawOrder};
+use crate::order::{ComdirectOrder, OrderChange, OrderChangeValidation, OrderFilterParameters, OrderId, RawOrder};
 use crate::order_outline::ComdirectOrderOutline;
 use crate::position::{Position, PositionId, RawPosition};
 use crate::serde::JsonResponseValues;
@@ -26,19 +27,6 @@ const HEX_CHARSET: &[u8] = b"0123456789abcdef";
 
 macro_rules! url {
     ($path:literal) => (concat!("https://api.comdirect.de/api", $path));
-}
-
-macro_rules! response_is_success {
-    ($response:ident) => (response_is_success!($response, return Err(Error::Other)););
-    ($response:ident, $error_handle:stmt) => {
-        if !$response.status().is_success() {
-            #[cfg(any(test, feature = "test"))]
-            println!("response: {:?}\nheaders: {:?}", $response, $response.headers());
-            #[cfg(any(test, feature = "test"))]
-            println!("text: {:?}", $response.text());
-            $error_handle
-        }
-    };
 }
 
 macro_rules! session_is_active {
@@ -53,7 +41,7 @@ macro_rules! session_is_active {
 macro_rules! session_request_method {
     ($method_name:ident, $method:ident) => {
         #[inline(always)]
-        fn $method_name(&self, url: &str, session: &Session) -> RequestBuilder {
+        fn $method_name<U: IntoUrl>(&self, url: U, session: &Session) -> RequestBuilder {
             self.client
                 .$method(url)
                 .bearer_auth(&session.access_token)
@@ -75,7 +63,7 @@ new_type_ids!(
 
 #[derive(Clone, getset::Getters)]
 #[getset(get = "pub")]
-pub struct Comdirect {
+pub struct ComdirectApi {
     client_id: ClientId,
     client_secret: ClientSecret,
     username: Username,
@@ -86,13 +74,13 @@ pub struct Comdirect {
     session: Option<Session>,
 }
 
-impl Drop for Comdirect {
+impl Drop for ComdirectApi {
     fn drop(&mut self) {
         let _ = self.end_session();
     }
 }
 
-impl Comdirect {
+impl ComdirectApi {
     pub fn new(client_id: ClientId, client_secret: ClientSecret, username: Username, password: Password) -> Self {
         let mut default_header = HeaderMap::new();
         default_header.insert(ACCEPT, HeaderValue::from_static("application/json"));
@@ -180,8 +168,8 @@ impl Comdirect {
             .post(URL)
             .header(CONTENT_TYPE, "application/x-www-form-urlencoded")
             .form(&params)
-            .send()?;
-        response_is_success!(response);
+            .send()?
+            .error_for_status()?;
 
         Ok(response.json::<PreSession>()?)
     }
@@ -190,13 +178,11 @@ impl Comdirect {
         const URL: &str = "https://api.comdirect.de/oauth/revoke";
 
         let session = session_is_active!(self.session);
-        let request = self.client
+        self.client
             .delete(URL)
             .bearer_auth(&session.access_token)
-            .build()?;
-
-        let response = self.client.execute(request)?;
-        response_is_success!(response);
+            .send()?
+            .error_for_status()?;
 
         Ok(())
     }
@@ -210,8 +196,8 @@ impl Comdirect {
             .get(URL)
             .bearer_auth(&pre_session.access_token)
             .header("x-http-request-info", self.make_request_info(&session_id))
-            .send()?;
-        response_is_success!(response);
+            .send()?
+            .error_for_status()?;
 
         let session_status = response.json::<(SessionStatus, )>()?.0;
 
@@ -237,10 +223,10 @@ impl Comdirect {
         let response =
             request
                 .body(data)
-                .send()?;
-        response_is_success!(response);
+                .send()?
+                .error_for_status()?;
 
-        let tan_challenge: TanChallenge = Comdirect::extract_tan_challenge(response.headers())?;
+        let tan_challenge: TanChallenge = ComdirectApi::extract_tan_challenge(response.headers())?;
 
         // todo: support other tan challenge types then PushTan
         match tan_challenge.typ() {
@@ -256,7 +242,7 @@ impl Comdirect {
                     return if tan_challenge.available_types().contains(&TanChallengeType::PushTan) {
                         let tan_challenge = self.request_tan_challenge(&session, Some(TanChallengeType::PushTan))?;
                         Ok(tan_challenge)
-                    } else { Err(Error::UnsupportedTanType) }
+                    } else { Err(Error::UnsupportedTanType) };
                 }
             }
         }
@@ -289,7 +275,7 @@ impl Comdirect {
             };
 
         let url = format!("{}/{}", url!("/session/clients/user/v1/sessions"), session.session_uuid.as_str());
-        let tan_header = Comdirect::make_x_authentication_info_header(&tan_challenge);
+        let tan_header = ComdirectApi::make_x_authentication_info_header(&tan_challenge);
         let data = format!(
             r#"{{
                 "identifier": "{}",
@@ -314,8 +300,8 @@ impl Comdirect {
             _ => request = request.header("x-once-authentication", "0"),
         }
 
-        let response = request.send()?;
-        response_is_success!(response);
+        let response = request.send()?
+            .error_for_status()?;
 
         let session_status = response.json::<SessionStatus>()?;
         if !session_status.tan_is_active() {
@@ -331,8 +317,8 @@ impl Comdirect {
         let session = session_is_active!(self.session);
 
         let response = self.make_get_session_request(URL, &session)
-            .send()?;
-        response_is_success!(response);
+            .send()?
+            .error_for_status()?;
 
         let json = response.json::<JsonResponseValues<ComdirectDeposit>>()?;
         Ok(json.values)
@@ -344,8 +330,8 @@ impl Comdirect {
 
         let response = self.make_get_session_request(&url, session)
             .query(&[("without-attr", "depot")])
-            .send()?;
-        response_is_success!(response);
+            .send()?
+            .error_for_status()?;
 
         let json = response.json::<JsonResponseValues<RawPosition>>()?;
 
@@ -398,8 +384,8 @@ impl Comdirect {
             request = request.query(filters);
         }
 
-        let response = request.send()?;
-        response_is_success!(response);
+        let response = request.send()?
+            .error_for_status()?;
 
         let json = response.json::<JsonResponseValues<RawTransaction>>()?;
 
@@ -420,8 +406,8 @@ impl Comdirect {
                 ("with-attr", "derivativeData"),
                 ("with-attr", "fundDistribution"),
             ])
-            .send()?;
-        response_is_success!(response);
+            .send()?
+            .error_for_status()?;
 
         let json = response.json::<JsonResponseValues<Instrument>>()?;
         Ok(json.values)
@@ -446,8 +432,8 @@ impl Comdirect {
             request = request.query(filters)
         }
 
-        let response = request.send()?;
-        response_is_success!(response);
+        let response = request.send()?
+            .error_for_status()?;
 
         let json = response.json::<JsonResponseMarketplaces>()?;
         Ok(json.market_places())
@@ -472,8 +458,8 @@ impl Comdirect {
             request = request.query(filters);
         }
 
-        let response = request.send()?;
-        response_is_success!(response);
+        let response = request.send()?
+            .error_for_status()?;
 
         let json = response.json::<JsonResponseValues<RawOrder>>()?;
 
@@ -490,8 +476,8 @@ impl Comdirect {
         let url = format!("{}/{}", url!("/brokerage/v3/orders"), order_id.as_str());
 
         let response = self.make_get_session_request(&url, session)
-            .send()?;
-        response_is_success!(response);
+            .send()?
+            .error_for_status()?;
 
         let raw = response.json::<RawOrder>()?;
         Ok(ComdirectOrder::from_raw(raw, deposit))
@@ -503,8 +489,8 @@ impl Comdirect {
 
         let response = self.make_post_session_request(URL, session)
             .json(order_outline)
-            .send()?;
-        response_is_success!(response);
+            .send()?
+            .error_for_status()?;
 
         println!("headers: {:?}", response.headers());
         println!("body: {:?}", response.text().unwrap());
@@ -519,10 +505,10 @@ impl Comdirect {
         const URL: &str = url!("/brokerage/v3/orders/prevalidation");
         let session = session_is_active!(self.session);
 
-        let response = self.make_post_session_request(URL, session)
+        self.make_post_session_request(URL, session)
             .json(order_outline)
-            .send()?;
-        response_is_success!(response);
+            .send()?
+            .error_for_status()?;
 
         // todo: maybe deserialize the response body
         // the repose body is just a RawOrder
@@ -543,10 +529,10 @@ impl Comdirect {
 
         let response = self.make_post_session_request(URL, session)
             .json(order_outline)
-            .send()?;
-        response_is_success!(response);
+            .send()?
+            .error_for_status()?;
 
-        let tan_challenge = Comdirect::extract_tan_challenge(response.headers())?;
+        let tan_challenge = ComdirectApi::extract_tan_challenge(response.headers())?;
         if *tan_challenge.typ() != TanChallengeType::Free {
             return Err(Error::UnexpectedTanType);
         }
@@ -557,24 +543,50 @@ impl Comdirect {
     fn place_order_outline<'d>(&self, order_outline: &ComdirectOrderOutline<'d, '_, '_>, tan_challenge: TanChallenge) -> Result<ComdirectOrder<'d>, Error> {
         const URL: &str = url!("/brokerage/v3/orders");
         let session = session_is_active!(self.session);
-        let tan_header = Comdirect::make_x_authentication_info_header(&tan_challenge);
+        let tan_header = ComdirectApi::make_x_authentication_info_header(&tan_challenge);
 
         let response = self.make_post_session_request(URL, session)
             .header(tan_header.0, tan_header.1)
             .json(order_outline)
-            .send()?;
-        response_is_success!(response);
+            .send()?
+            .error_for_status()?;
 
         let raw_order = response.json::<RawOrder>()?;
         let order = ComdirectOrder::from_raw(raw_order, order_outline.deposit());
         Ok(order)
     }
 
-    pub fn pre_validate_order_change(&self, _order: &ComdirectOrder) -> Result<(), Error> {
-        // todo: create a new UpdateOrder type that holds Option's for each limit and the validity
-        // this will help to make sure, no one can update the ComdirectOrder directly, but only
-        // this function can
-        unimplemented!()
+    pub fn pre_validate_order_change(&self, order_change: &OrderChange) -> Result<(), Error> {
+        let validation = OrderChangeValidation::Change(order_change);
+        self._pre_validate_order_change(validation)
+    }
+
+    pub fn pre_validate_order_deletion(&self, order: &ComdirectOrder) -> Result<(), Error> {
+        let validation = OrderChangeValidation::Delete(order);
+        self._pre_validate_order_change(validation)
+    }
+
+    fn _pre_validate_order_change(&self, order_change_validation: OrderChangeValidation) -> Result<(), Error> {
+        use OrderChangeValidation::*;
+        let session = session_is_active!(self.session);
+        let url = format!(
+            "{}/{}/prevalidation",
+            url!("/brokerage/v3/orders"), order_change_validation.order_id()
+        );
+
+        #[derive(serde::Serialize)]
+        struct Delete {}
+
+        let mut request = self.make_post_session_request(&url, session);
+        match order_change_validation {
+            Change(order_change) => request = request.json(&order_change),
+            Delete(_) => request = request.json(&Delete {})
+        }
+
+        dbg!(request
+            .send()?)
+            .error_for_status()?;
+        Ok(())
     }
 
     #[inline(always)]
@@ -599,7 +611,7 @@ impl Comdirect {
         format!(
             r#"{{"clientRequestId":{{"sessionId":"{}","requestId":"{}"}}}}"#,
             session_id.as_str(),
-            Comdirect::make_request_id()
+            ComdirectApi::make_request_id()
         )
     }
 
