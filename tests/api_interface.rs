@@ -9,13 +9,15 @@ use pecunia::price::Price;
 use pecunia::primitives::F64;
 use pecunia::units::currency::Currency;
 use stock_market_utils::derivative::{Derivative, ISIN, SYMBOL, WKN};
-use stock_market_utils::order::OrderType;
+use stock_market_utils::order::{OrderStatus, OrderType};
 
 use comdirect_api::api_interface::ComdirectApi;
+use comdirect_api::deposit::ComdirectDeposit;
 use comdirect_api::instrument::InstrumentId;
-use comdirect_api::market_place::MarketPlaceFilterParameters;
+use comdirect_api::market_place::{MarketPlace, MarketPlaceFilterParameters};
 use comdirect_api::order::{ComdirectOrder, OrderChange, OrderFilterParameters};
-use comdirect_api::order_outline::{ComdirectOrderOutline, RawSingleOrderOutline};
+use comdirect_api::order_outline::{OrderOutline, RawSingleOrderOutline};
+use comdirect_api::position::Position;
 use comdirect_api::transaction::TransactionFilterParameters;
 
 lazy_static! {
@@ -35,6 +37,75 @@ fn new_comdirect() -> ComdirectApi {
         env!("username").to_string().into(),
         env!("password").to_string().into(),
     )
+}
+
+fn deposit() -> ComdirectDeposit {
+    SESSION
+        .get_deposits()
+        .unwrap()
+        .swap_remove(0)
+}
+
+fn market_place() -> MarketPlace {
+    let amd_isin = ISIN::try_from("US0079031078").unwrap();
+    let filter_parameters = MarketPlaceFilterParameters::builder()
+        .isin(&amd_isin)
+        .build().unwrap();
+    SESSION
+        .get_marketplaces_filtered(&filter_parameters)
+        .unwrap()
+        .swap_remove(1)
+}
+
+fn position<'d>(deposit: &'d ComdirectDeposit) -> Position<'d> {
+    SESSION
+        .get_positions(deposit)
+        .unwrap()
+        .swap_remove(0)
+}
+
+fn instrument_id() -> InstrumentId {
+    InstrumentId::from(Derivative::isin_from_str("US0079031078").unwrap())
+}
+
+fn order_outline<'d, 'm, 'i>(deposit: &'d ComdirectDeposit, market_place: &'m MarketPlace, instrument_id: &'i InstrumentId) -> OrderOutline<'d, 'i, 'm> {
+    let raw = RawSingleOrderOutline::builder()
+        .deposit(&deposit)
+        .order_type(OrderType::Limit)
+        .limit(Price::new(10.0, Currency::EUR))
+        .market_place_id(market_place.id())
+        .instrument_id(&instrument_id)
+        .quantity(F64::new(1.0))
+        .build()
+        .unwrap();
+    OrderOutline::SingleOrder(raw)
+}
+
+macro_rules! position {
+    ($position:ident) => {
+        let deposit = deposit();
+        let $position = SESSION.get_positions(&deposit).unwrap().swap_remove(0);
+    };
+    (mut $position:ident) => {
+        let deposit = deposit();
+        let mut $position = SESSION.get_positions(&deposit).unwrap().swap_remove(0);
+    };
+}
+
+macro_rules! orders {
+    ($orders:ident) => {
+        let deposit = deposit();
+        let $orders = SESSION.get_orders(&deposit).unwrap();
+    };
+}
+
+macro_rules! order_outline {
+    ($order_outline:ident) => {
+        let deposit = deposit();
+        let market_place = market_place();
+        let instrument_id = instrument_id();
+        let $order_outline = order_outline(&deposit, &market_place, &instrument_id);
+    };
 }
 
 #[test]
@@ -70,47 +141,45 @@ fn get_deposits() {
 
 #[test]
 fn get_deposit_positions() {
-    let deposits = SESSION.get_deposits().unwrap();
-    let positions = SESSION.get_positions(&deposits[0]).unwrap();
+    let deposit = deposit();
+    let positions = SESSION.get_positions(&deposit).unwrap();
     println!("\n\npositions: {:#?}", positions);
 }
 
 #[test]
 fn update_position() {
-    let deposits = SESSION.get_deposits().unwrap();
-    let mut positions = SESSION.get_positions(&deposits[0]).unwrap();
-    println!("\n\nposition: {:#?}", positions[0]);
+    position!(mut position);
+    println!("\n\nposition: {:#?}", position);
 
     sleep(Duration::from_secs(2));
-    SESSION.update_position(&mut positions[0]).unwrap();
-    println!("position: {:#?}", positions[0]);
+    SESSION.update_position(&mut position).unwrap();
+    println!("position: {:#?}", position);
 }
 
 #[test]
 fn get_deposit_transactions() {
-    let deposits = SESSION.get_deposits().unwrap();
-    let transactions = SESSION.get_deposit_transactions(&deposits[0]).unwrap();
+    let deposit = deposit();
+    let transactions = SESSION.get_deposit_transactions(&deposit).unwrap();
     println!("\n\ntransactions: {:#?}", transactions);
 }
 
 #[test]
 fn get_deposit_filtered_transactions() {
-    let deposits = SESSION.get_deposits().unwrap();
-    let positions = SESSION.get_positions(&deposits[0]).unwrap();
-
+    let deposit = deposit();
+    let position = position(&deposit);
     let parameters = TransactionFilterParameters::default()
-        .set_position_wkn(&positions[0]);
+        .set_position_wkn(&position);
 
     let transactions = SESSION.get_deposit_transactions_filtered(
-        &deposits[0],
+        &deposit,
         &parameters,
     ).unwrap();
     println!("\n\ntransactions: {:#?}", transactions);
 }
 
 #[test]
+// todo: why is a Vec returned?
 fn get_instrument() {
-
     // McDonald's
     let wkn = Derivative::WKN(WKN::try_from("856958").unwrap());
     let isin = Derivative::ISIN(ISIN::try_from("US5801351017").unwrap());
@@ -143,78 +212,46 @@ fn get_market_places_filtered() {
 
 #[test]
 fn get_orders() {
-    let deposits = SESSION.get_deposits().unwrap();
-    let orders = SESSION.get_orders(&deposits[0]).unwrap();
+    orders!(orders);
     println!("\n\nall orders: {:#?}", orders);
 }
 
 #[test]
 fn get_orders_filtered() {
-    let deposits = SESSION.get_deposits().unwrap();
-    let orders = SESSION.get_orders_filtered(&deposits[0], &OrderFilterParameters::default()).unwrap();
+    let deposit = deposit();
+    let orders = SESSION.get_orders_filtered(&deposit, &OrderFilterParameters::default()).unwrap();
     println!("\n\norders filtered (default): {:#?}", orders);
 }
 
 #[test]
 fn get_order() {
-    let deposits = SESSION.get_deposits().unwrap();
-
-    let orders = SESSION.get_orders(&deposits[0]).unwrap();
+    let deposit = deposit();
+    let orders = SESSION.get_orders(&deposit).unwrap();
     if orders.len() == 0 {
         println!("\n\nNo orders found");
         return;
     }
-    let order = SESSION.get_order(&deposits[0], orders[0].raw().id()).unwrap();
+    let order = SESSION.get_order(&deposit, orders[0].raw().id()).unwrap();
 
     println!("\n\norders: {:#?}", orders);
     println!("order 0: {:#?}", order);
     assert_eq!(orders[0], order);
 }
 
+
+
 #[test]
 fn pre_validate_order_outline() {
-    let deposits = SESSION.get_deposits().unwrap();
-    let amd_isin = ISIN::try_from("US0079031078").unwrap();
-    let amd = InstrumentId::from(Derivative::isin_from_str("US0079031078").unwrap());
-    let filter_parameters = MarketPlaceFilterParameters::builder()
-        .isin(&amd_isin)
-        .build().unwrap();
-    let market_places = SESSION.get_marketplaces_filtered(&filter_parameters).unwrap();
+    order_outline!(order_outline);
 
-    let order_outline = RawSingleOrderOutline::builder()
-        .deposit(&deposits[0])
-        .order_type(OrderType::Limit)
-        .limit(Price::new(10.0, Currency::EUR))
-        .market_place_id(market_places[1].id())
-        .instrument_id(&amd)
-        .quantity(F64::new(1.0))
-        .build()
-        .unwrap();
-
-    let order_outline = ComdirectOrderOutline::SingleOrder(order_outline);
     SESSION.pre_validate_order_outline(&order_outline).unwrap();
 }
 
 #[test]
 #[ignore]
 fn order_cost_indication() {
-    let deposits = SESSION.get_deposits().unwrap();
-    let amd_isin = ISIN::try_from("US0079031078").unwrap();
-    let amd = InstrumentId::from(Derivative::isin_from_str("US0079031078").unwrap());
-    let filter_parameters = MarketPlaceFilterParameters::builder()
-        .isin(&amd_isin)
-        .build().unwrap();
-    let market_places = SESSION.get_marketplaces_filtered(&filter_parameters).unwrap();
+    order_outline!(order_outline);
 
-    let order_outline = RawSingleOrderOutline::builder()
-        .deposit(&deposits[0])
-        .market_place_id(market_places[1].id())
-        .instrument_id(&amd)
-        .quantity(F64::new(1.0))
-        .build()
-        .unwrap();
-
-    let order_outline = ComdirectOrderOutline::SingleOrder(order_outline);
     SESSION.pre_validate_order_outline(&order_outline).unwrap();
     SESSION.order_cost_indication(&order_outline).unwrap();
 }
@@ -222,54 +259,17 @@ fn order_cost_indication() {
 #[test]
 #[ignore]
 fn place_order() {
-    let deposits = SESSION.get_deposits().unwrap();
-    let amd_isin = ISIN::try_from("US0079031078").unwrap();
-    let amd = InstrumentId::from(Derivative::isin_from_str("US0079031078").unwrap());
-    let filter_parameters = MarketPlaceFilterParameters::builder()
-        .isin(&amd_isin)
-        .build().unwrap();
-    let market_places = SESSION.get_marketplaces_filtered(&filter_parameters).unwrap();
+    order_outline!(order_outline);
 
-    let order_outline = RawSingleOrderOutline::builder()
-        .deposit(&deposits[0])
-        .order_type(OrderType::Limit)
-        .limit(Price::new(10.0, Currency::EUR))
-        .market_place_id(market_places[1].id())
-        .instrument_id(&amd)
-        .quantity(F64::new(1.0))
-        .build()
-        .unwrap();
-
-    let order_outline = ComdirectOrderOutline::SingleOrder(order_outline);
-    SESSION.pre_validate_order_outline(&order_outline).unwrap();
     let order = SESSION.place_order(&order_outline).unwrap();
     println!("order: {:?}", order);
-    let _: ComdirectOrder = SESSION.get_order(&deposits[0], order.id()).unwrap();
+    let _: ComdirectOrder = SESSION.get_order(&deposit(), order.id()).unwrap();
 }
 
 #[test]
 #[ignore]
 fn pre_validate_order_change() {
-    let deposits = SESSION.get_deposits().unwrap();
-    let amd_isin = ISIN::try_from("US0079031078").unwrap();
-    let amd = InstrumentId::from(Derivative::isin_from_str("US0079031078").unwrap());
-    let filter_parameters = MarketPlaceFilterParameters::builder()
-        .isin(&amd_isin)
-        .build().unwrap();
-    let market_places = SESSION.get_marketplaces_filtered(&filter_parameters).unwrap();
-
-    let order_outline = RawSingleOrderOutline::builder()
-        .deposit(&deposits[0])
-        .order_type(OrderType::Limit)
-        .limit(Price::new(10.0, Currency::EUR))
-        .market_place_id(market_places[1].id())
-        .instrument_id(&amd)
-        .quantity(F64::new(1.0))
-        .build()
-        .unwrap();
-
-    let order_outline = ComdirectOrderOutline::SingleOrder(order_outline);
-    SESSION.pre_validate_order_outline(&order_outline).unwrap();
+    order_outline!(order_outline);
     let mut order = SESSION.place_order(&order_outline).unwrap();
 
     let order_change = OrderChange::from_order0(&mut order)
@@ -281,27 +281,39 @@ fn pre_validate_order_change() {
 #[test]
 #[ignore]
 fn pre_validate_order_deletion() {
-    let deposits = SESSION.get_deposits().unwrap();
-    let amd_isin = ISIN::try_from("US0079031078").unwrap();
-    let amd = InstrumentId::from(Derivative::isin_from_str("US0079031078").unwrap());
-    let filter_parameters = MarketPlaceFilterParameters::builder()
-        .isin(&amd_isin)
-        .build().unwrap();
-    let market_places = SESSION.get_marketplaces_filtered(&filter_parameters).unwrap();
-
-    let order_outline = RawSingleOrderOutline::builder()
-        .deposit(&deposits[0])
-        .order_type(OrderType::Limit)
-        .limit(Price::new(10.0, Currency::EUR))
-        .market_place_id(market_places[1].id())
-        .instrument_id(&amd)
-        .quantity(F64::new(1.0))
-        .build()
-        .unwrap();
-
-    let order_outline = ComdirectOrderOutline::SingleOrder(order_outline);
-    SESSION.pre_validate_order_outline(&order_outline).unwrap();
+    order_outline!(order_outline);
     let order = SESSION.place_order(&order_outline).unwrap();
 
     SESSION.pre_validate_order_deletion(&order).unwrap();
+}
+
+#[test]
+#[ignore]
+fn change_order() {
+    order_outline!(order_outline);
+    let mut order = SESSION.place_order(&order_outline).unwrap();
+
+    println!("before change: {:?}", order);
+
+    let order_change = OrderChange::from_order0(&mut order)
+        .limit(Price::new(5.0, Currency::EUR));
+
+    SESSION.change_order(order_change).unwrap();
+    println!("after change: {:?}", order);
+}
+
+#[test]
+#[ignore]
+fn delete_order() {
+    use comdirect_api::error::Error;
+    order_outline!(order_outline);
+    let order = SESSION.place_order(&order_outline).unwrap();
+    let order_id = order.id().clone();
+
+    SESSION.delete_order(order).unwrap();
+
+    match SESSION.get_order(&deposit(), &order_id) {
+        Ok(o) => assert_eq!(o.status0(), OrderStatus::Canceled),
+        Err(e) => assert_eq!(e, Error::NotFound)
+    }
 }

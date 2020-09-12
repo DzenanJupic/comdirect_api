@@ -1,7 +1,7 @@
 use derive_more::{Display, Error as DeriveError};
 use reqwest::StatusCode;
 
-#[derive(Copy, Clone, Debug, Display, DeriveError)]
+#[derive(Copy, Clone, Debug, Display, PartialEq, DeriveError)]
 pub enum Error {
     NoActiveSession,
     InvalidTan,

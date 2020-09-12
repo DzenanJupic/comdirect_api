@@ -12,7 +12,7 @@ new_type_ids!(
     pub struct ExecutionId
 );
 
-#[derive(Clone, Debug, PartialEq, getset::Getters)]
+#[derive(Debug, PartialEq, getset::Getters)]
 #[getset(get = "pub")]
 pub struct ComdirectOrder<'d> {
     deposit: &'d ComdirectDeposit,
@@ -152,6 +152,9 @@ pub struct OrderChange<'o> {
     validity: Option<OrderValidity>,
 }
 
+#[derive(serde::Serialize)]
+pub(crate) struct DeleteOrder {}
+
 #[derive(Clone, Debug, Deserialize, PartialEq)]
 pub struct Execution {
     #[serde(rename = "executionId")]
@@ -218,6 +221,15 @@ impl<'d> ComdirectOrder<'d> {
             RawOrder::CombinationOrder(raw) => &raw.id
         }
     }
+
+    #[inline(always)]
+    pub fn status0(&self) -> OrderStatus {
+        use RawOrder::*;
+        match self.raw {
+            SingleOrder(ref order) => order.status,
+            CombinationOrder(ref order) => order.sub_orders.0.status
+        }
+    }
 }
 
 impl RawOrder {
@@ -256,6 +268,17 @@ impl OrderChangeValidation<'_, '_, '_> {
     #[inline(always)]
     pub(crate) fn order_id(&self) -> &OrderId {
         use OrderChangeValidation::*;
+        match self {
+            Change(change) => change.order_id(),
+            Delete(order) => order.id()
+        }
+    }
+}
+
+impl OrderChangeAction<'_, '_> {
+    #[inline(always)]
+    pub(crate) fn order_id(&self) -> &OrderId {
+        use OrderChangeAction::*;
         match self {
             Change(change) => change.order_id(),
             Delete(order) => order.id()

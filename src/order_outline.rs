@@ -12,7 +12,7 @@ use crate::market_place::MarketPlaceId;
 
 #[derive(Clone, Debug, Serialize, PartialEq)]
 #[serde(untagged)]
-pub enum ComdirectOrderOutline<'d, 'i, 'm> {
+pub enum OrderOutline<'d, 'i, 'm> {
     CombinationOrder(RawCombinationOrderOutline<'d, 'i, 'm>),
     SingleOrder(RawSingleOrderOutline<'d, 'i, 'm>),
 }
@@ -89,11 +89,11 @@ pub struct RawSingleOrderOutline<'d, 'i, 'm> {
     quantity: F64,
 }
 
-impl<'d> ComdirectOrderOutline<'d, '_, '_> {
+impl<'d> OrderOutline<'d, '_, '_> {
     pub fn deposit(&self) -> &'d ComdirectDeposit {
         match self {
-            ComdirectOrderOutline::SingleOrder(order) => order.deposit,
-            ComdirectOrderOutline::CombinationOrder(order) => order.sub_orders.0.deposit
+            OrderOutline::SingleOrder(order) => order.deposit,
+            OrderOutline::CombinationOrder(order) => order.sub_orders.0.deposit
         }
     }
 }

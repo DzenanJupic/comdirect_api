@@ -15,8 +15,8 @@ use crate::deposit::ComdirectDeposit;
 use crate::error::Error;
 use crate::instrument::Instrument;
 use crate::market_place::{JsonResponseMarketplaces, MarketPlace, MarketPlaceFilterParameters};
-use crate::order::{ComdirectOrder, OrderChange, OrderChangeValidation, OrderFilterParameters, OrderId, RawOrder};
-use crate::order_outline::ComdirectOrderOutline;
+use crate::order::{ComdirectOrder, DeleteOrder, OrderChange, OrderChangeAction, OrderChangeValidation, OrderFilterParameters, OrderId, RawOrder};
+use crate::order_outline::OrderOutline;
 use crate::position::{Position, PositionId, RawPosition};
 use crate::serde::JsonResponseValues;
 use crate::session::{GrantType, PreSession, Session, SessionId, SessionStatus};
@@ -34,6 +34,14 @@ macro_rules! session_is_active {
         match $session {
             Some(ref session) => session,
             None => return Err(Error::NoActiveSession)
+        }
+    };
+}
+
+macro_rules! tan_is_free {
+    ($tan:expr) => {
+        if *$tan.typ() != TanChallengeType::Free {
+            return Err(Error::UnexpectedTanType);
         }
     };
 }
@@ -483,7 +491,7 @@ impl ComdirectApi {
         Ok(ComdirectOrder::from_raw(raw, deposit))
     }
 
-    pub fn order_cost_indication(&self, order_outline: &ComdirectOrderOutline) -> Result<(), Error> {
+    pub fn order_cost_indication(&self, order_outline: &OrderOutline) -> Result<(), Error> {
         const URL: &str = url!("/brokerage/v3/orders/costindicationexante");
         let session = session_is_active!(self.session);
 
@@ -501,7 +509,7 @@ impl ComdirectApi {
         // Ok(())
     }
 
-    pub fn pre_validate_order_outline(&self, order_outline: &ComdirectOrderOutline) -> Result<(), Error> {
+    pub fn pre_validate_order_outline(&self, order_outline: &OrderOutline) -> Result<(), Error> {
         const URL: &str = url!("/brokerage/v3/orders/prevalidation");
         let session = session_is_active!(self.session);
 
@@ -517,13 +525,13 @@ impl ComdirectApi {
         Ok(())
     }
 
-    pub fn place_order<'d>(&self, order_outline: &ComdirectOrderOutline<'d, '_, '_>) -> Result<ComdirectOrder<'d>, Error> {
+    pub fn place_order<'d>(&self, order_outline: &OrderOutline<'d, '_, '_>) -> Result<ComdirectOrder<'d>, Error> {
         let tan_challenge = self.validate_order_outline(order_outline)?;
         let order = self.place_order_outline(order_outline, tan_challenge)?;
         Ok(order)
     }
 
-    fn validate_order_outline(&self, order_outline: &ComdirectOrderOutline) -> Result<TanChallenge, Error> {
+    fn validate_order_outline(&self, order_outline: &OrderOutline) -> Result<TanChallenge, Error> {
         const URL: &str = url!("/brokerage/v3/orders/validation");
         let session = session_is_active!(self.session);
 
@@ -533,14 +541,12 @@ impl ComdirectApi {
             .error_for_status()?;
 
         let tan_challenge = ComdirectApi::extract_tan_challenge(response.headers())?;
-        if *tan_challenge.typ() != TanChallengeType::Free {
-            return Err(Error::UnexpectedTanType);
-        }
+        tan_is_free!(tan_challenge);
 
         Ok(tan_challenge)
     }
 
-    fn place_order_outline<'d>(&self, order_outline: &ComdirectOrderOutline<'d, '_, '_>, tan_challenge: TanChallenge) -> Result<ComdirectOrder<'d>, Error> {
+    fn place_order_outline<'d>(&self, order_outline: &OrderOutline<'d, '_, '_>, tan_challenge: TanChallenge) -> Result<ComdirectOrder<'d>, Error> {
         const URL: &str = url!("/brokerage/v3/orders");
         let session = session_is_active!(self.session);
         let tan_header = ComdirectApi::make_x_authentication_info_header(&tan_challenge);
@@ -556,36 +562,131 @@ impl ComdirectApi {
         Ok(order)
     }
 
+    #[inline(always)]
     pub fn pre_validate_order_change(&self, order_change: &OrderChange) -> Result<(), Error> {
         let validation = OrderChangeValidation::Change(order_change);
         self._pre_validate_order_change(validation)
     }
 
+    #[inline(always)]
     pub fn pre_validate_order_deletion(&self, order: &ComdirectOrder) -> Result<(), Error> {
         let validation = OrderChangeValidation::Delete(order);
         self._pre_validate_order_change(validation)
     }
 
-    fn _pre_validate_order_change(&self, order_change_validation: OrderChangeValidation) -> Result<(), Error> {
+    fn _pre_validate_order_change(&self, change_validation: OrderChangeValidation) -> Result<(), Error> {
         use OrderChangeValidation::*;
         let session = session_is_active!(self.session);
         let url = format!(
             "{}/{}/prevalidation",
-            url!("/brokerage/v3/orders"), order_change_validation.order_id()
+            url!("/brokerage/v3/orders"), change_validation.order_id()
         );
 
         #[derive(serde::Serialize)]
         struct Delete {}
 
         let mut request = self.make_post_session_request(&url, session);
-        match order_change_validation {
+        match change_validation {
             Change(order_change) => request = request.json(&order_change),
             Delete(_) => request = request.json(&Delete {})
         }
 
-        dbg!(request
-            .send()?)
+        request
+            .send()?
             .error_for_status()?;
+        Ok(())
+    }
+
+    #[inline(always)]
+    pub fn order_change_cost_indication(&self, order_change: &OrderChange) -> Result<(), Error> {
+        let validation = OrderChangeValidation::Change(order_change);
+        self._order_change_cost_indication(validation)
+    }
+
+    #[inline(always)]
+    pub fn order_deletion_cost_indication(&self, order: &ComdirectOrder) -> Result<(), Error> {
+        let validation = OrderChangeValidation::Delete(order);
+        self._order_change_cost_indication(validation)
+    }
+
+    fn _order_change_cost_indication(&self, _change_validation: OrderChangeValidation) -> Result<(), Error> {
+        unimplemented!()
+    }
+
+    #[inline(always)]
+    pub fn change_order(&self, order_change: OrderChange) -> Result<(), Error> {
+        let tan_challenge = self.validate_order_change(&order_change)?;
+        let action = OrderChangeAction::Change(order_change);
+        self._change_order(action, tan_challenge)
+    }
+
+    #[inline(always)]
+    // todo: if this fails, return the order
+    pub fn delete_order(&self, order: ComdirectOrder) -> Result<(), Error> {
+        let tan_challenge = self.validate_order_deletion(&order)?;
+        let action = OrderChangeAction::Delete(order);
+        self._change_order(action, tan_challenge)
+    }
+
+    #[inline(always)]
+    fn validate_order_change(&self, order_change: &OrderChange) -> Result<TanChallenge, Error> {
+        let validation = OrderChangeValidation::Change(order_change);
+        self._validate_order_change(validation)
+    }
+
+    #[inline(always)]
+    fn validate_order_deletion(&self, order: &ComdirectOrder) -> Result<TanChallenge, Error> {
+        let validation = OrderChangeValidation::Delete(order);
+        self._validate_order_change(validation)
+    }
+
+    fn _validate_order_change(&self, change_validation: OrderChangeValidation) -> Result<TanChallenge, Error> {
+        use OrderChangeValidation::*;
+        let session = session_is_active!(self.session);
+        let url = format!("{}/{}/validation", url!("/brokerage/v3/orders"), change_validation.order_id());
+
+        let mut request = self.make_post_session_request(&url, session);
+        match change_validation {
+            Change(order_change) => request = request.json(order_change),
+            Delete(_) => request = request.json(&DeleteOrder {})
+        }
+
+        let response = request
+            .send()?
+            .error_for_status()?;
+        let tan_challenge = ComdirectApi::extract_tan_challenge(response.headers())?;
+        tan_is_free!(tan_challenge);
+
+        Ok(tan_challenge)
+    }
+
+    fn _change_order(&self, change_action: OrderChangeAction, tan_challenge: TanChallenge) -> Result<(), Error> {
+        use OrderChangeAction::*;
+        let session = session_is_active!(self.session);
+        let url = format!("{}/{}", url!("/brokerage/v3/orders"), change_action.order_id());
+        let tan_header = ComdirectApi::make_x_authentication_info_header(&tan_challenge);
+
+        let request = match change_action {
+            Change(ref order_change) => {
+                self
+                    .make_patch_session_request(&url, session)
+                    .json(order_change)
+            }
+            Delete(_) => {
+                self
+                    .make_delete_session_request(&url, session)
+                    .json(&DeleteOrder {})
+            }
+        };
+
+        request
+            .header(tan_header.0, tan_header.1)
+            .send()?
+            .error_for_status()?;
+
+        if let Change(order_change) = change_action {
+            order_change.change_order();
+        }
         Ok(())
     }
 
@@ -632,4 +733,6 @@ impl ComdirectApi {
 
     session_request_method!(make_get_session_request, get);
     session_request_method!(make_post_session_request, post);
+    session_request_method!(make_patch_session_request, patch);
+    session_request_method!(make_delete_session_request, delete);
 }
