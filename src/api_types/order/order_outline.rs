@@ -1,14 +1,12 @@
 use derive_builder::Builder;
 use getset::{Getters, Setters};
-use pecunia::price::Price;
-use pecunia::primitives::F64;
-use pecunia::primitives::Percent;
+use pecunia::prelude::*;
 use serde::{Serialize, Serializer};
 use stock_market_utils::order::{AuctionType, OrderDirection, OrderType, OrderTypeExtension, OrderValidity};
 
-use crate::deposit::ComdirectDeposit;
-use crate::instrument::InstrumentId;
-use crate::market_place::MarketPlaceId;
+use crate::api_types::deposit::ComdirectDeposit;
+use crate::api_types::instrument::InstrumentId;
+use crate::api_types::market_place::MarketPlaceId;
 
 #[derive(Clone, Debug, Serialize, PartialEq)]
 #[serde(untagged)]

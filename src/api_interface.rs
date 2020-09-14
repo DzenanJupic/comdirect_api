@@ -10,18 +10,19 @@ use serde::de::DeserializeSeed;
 use serde_json::Deserializer;
 use stock_market_utils::derivative::Derivative;
 
-use crate::cost_indication::{ChangeCostIndication, CostIndication, RawCostIndication};
-use crate::deposit::ComdirectDeposit;
+use crate::api_types::cost_indication::{ChangeCostIndication, CostIndication, RawCostIndication};
+use crate::api_types::deposit::ComdirectDeposit;
+use crate::api_types::instrument::Instrument;
+use crate::api_types::market_place::{JsonResponseMarketplaces, MarketPlace, MarketPlaceFilterParameters};
+use crate::api_types::order::{ComdirectOrder, OrderFilterParameters, OrderId, RawOrder};
+use crate::api_types::order::order_change::{DeleteOrder, OrderChange, OrderChangeAction, OrderChangeValidation};
+use crate::api_types::order::order_outline::OrderOutline;
+use crate::api_types::position::{Position, PositionId, RawPosition};
+use crate::api_types::transaction::{RawTransaction, Transaction, TransactionFilterParameters};
 use crate::error::Error;
-use crate::instrument::Instrument;
-use crate::market_place::{JsonResponseMarketplaces, MarketPlace, MarketPlaceFilterParameters};
-use crate::order::{ComdirectOrder, DeleteOrder, OrderChange, OrderChangeAction, OrderChangeValidation, OrderFilterParameters, OrderId, RawOrder};
-use crate::order_outline::OrderOutline;
-use crate::position::{Position, PositionId, RawPosition};
 use crate::serde::{JsonResponseValue, JsonResponseValues};
 use crate::session::{GrantType, PreSession, Session, SessionId, SessionStatus};
-use crate::tan::{TanChallenge, TanChallengeType};
-use crate::transaction::{RawTransaction, Transaction, TransactionFilterParameters};
+use crate::session::tan::{TanChallenge, TanChallengeType};
 
 const HEX_CHARSET: &[u8] = b"0123456789abcdef";
 

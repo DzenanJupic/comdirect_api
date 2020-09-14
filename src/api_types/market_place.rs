@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 use stock_market_utils::derivative::{ISIN, SYMBOL, WKN};
 use stock_market_utils::order::{AuctionType, OrderDirection, OrderType, OrderTypeExtension};
 
-use crate::order::ComdirectOrderValidityType;
+use crate::api_types::order::ComdirectOrderValidityType;
 
 new_type_ids!(
     pub struct MarketPlaceId

@@ -2,8 +2,9 @@ use pecunia::prelude::*;
 use pecunia::units::currency::Currency;
 use serde::Deserialize;
 
-use crate::order::{ComdirectOrder, OrderChange};
-use crate::order_outline::OrderOutline;
+use crate::api_types::order::ComdirectOrder;
+use crate::api_types::order::order_change::OrderChange;
+use crate::api_types::order::order_outline::OrderOutline;
 
 #[derive(Debug, PartialEq, getset::Getters)]
 #[getset(get = "pub")]

@@ -3,7 +3,7 @@ use pecunia::price::{Price, TimeBoundedPrice};
 use serde::Deserialize;
 use stock_market_utils::derivative::WKN;
 
-use crate::deposit::ComdirectDeposit;
+use crate::api_types::deposit::ComdirectDeposit;
 
 new_type_ids!(
     pub struct PositionId

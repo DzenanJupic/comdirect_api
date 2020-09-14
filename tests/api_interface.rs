@@ -287,6 +287,7 @@ fn pre_validate_order_deletion() {
 }
 
 #[test]
+#[ignore]
 fn order_change_cost_indication() {
     order_outline!(order_outline);
     let mut order = SESSION.place_order(&order_outline).unwrap();

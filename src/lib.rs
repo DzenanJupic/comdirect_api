@@ -43,18 +43,9 @@ macro_rules! option_builder_fn {
 }
 
 pub mod api_interface;
-pub mod cost_indication;
-pub mod deposit;
+pub mod api_types;
 pub mod error;
-pub mod instrument;
-pub mod order;
-pub mod market_place;
-pub mod position;
-pub mod order_outline;
-pub mod transaction;
 
-#[doc(hidden)]
-mod tan;
 #[doc(hidden)]
 mod session;
 #[doc(hidden)]

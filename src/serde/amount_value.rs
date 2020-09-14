@@ -25,8 +25,7 @@ pub(crate) mod quantity {
 }
 
 pub(crate) mod price {
-    use pecunia::price::Price;
-    use pecunia::primitive_value::PrimitiveValue;
+    use pecunia::prelude::*;
     use pecunia::primitives::RawPrice;
     use pecunia::serde_with;
     use pecunia::units::currency::Currency;

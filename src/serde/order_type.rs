@@ -1,6 +1,6 @@
+use pecunia::{serde_option, serde_with};
 use serde::{Deserialize, Serialize};
 use stock_market_utils::order::OrderType;
-use pecunia::{serde_with, serde_option};
 
 #[derive(Serialize, Deserialize)]
 #[serde(remote = "OrderType")]
@@ -24,6 +24,7 @@ serde_with!(Deserializer for OrderType as pub(crate) OrderTypeDeserializer with 
 
 pub(crate) mod option {
     use super::*;
+
     serde_option!(serialize OrderType as pub(crate) OrderTypeOptionSerializer with OrderTypeSerializer);
 }
 
@@ -34,7 +35,7 @@ pub(crate) mod venue_map {
     use serde::Deserializer;
     use serde::export::fmt;
 
-    use crate::market_place::OrderTypeAbilities;
+    use crate::api_types::market_place::OrderTypeAbilities;
 
     use super::*;
 

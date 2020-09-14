@@ -1,6 +1,9 @@
 use chrono::{DateTime, Local};
 use serde::Deserialize;
 
+#[doc(hidden)]
+pub(crate) mod tan;
+
 new_type_ids!(
     pub struct SessionId
     pub struct SessionUuid
