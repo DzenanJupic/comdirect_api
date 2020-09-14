@@ -43,6 +43,7 @@ macro_rules! option_builder_fn {
 }
 
 pub mod api_interface;
+pub mod cost_indication;
 pub mod deposit;
 pub mod error;
 pub mod instrument;

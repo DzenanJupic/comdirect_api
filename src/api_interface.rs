@@ -2,15 +2,15 @@ use std::collections::HashMap;
 
 use chrono::Local;
 use rand::{self, Rng};
-use reqwest::{
-    blocking::Client,
-    header::{ACCEPT, CONTENT_TYPE},
-};
-use reqwest::blocking::RequestBuilder;
+use reqwest::blocking::{Client, RequestBuilder, Response};
+use reqwest::header::{ACCEPT, CONTENT_TYPE};
 use reqwest::header::{HeaderMap, HeaderValue};
 use reqwest::IntoUrl;
+use serde::de::DeserializeSeed;
+use serde_json::Deserializer;
 use stock_market_utils::derivative::Derivative;
 
+use crate::cost_indication::{ChangeCostIndication, CostIndication, RawCostIndication};
 use crate::deposit::ComdirectDeposit;
 use crate::error::Error;
 use crate::instrument::Instrument;
@@ -18,7 +18,7 @@ use crate::market_place::{JsonResponseMarketplaces, MarketPlace, MarketPlaceFilt
 use crate::order::{ComdirectOrder, DeleteOrder, OrderChange, OrderChangeAction, OrderChangeValidation, OrderFilterParameters, OrderId, RawOrder};
 use crate::order_outline::OrderOutline;
 use crate::position::{Position, PositionId, RawPosition};
-use crate::serde::JsonResponseValues;
+use crate::serde::{JsonResponseValue, JsonResponseValues};
 use crate::session::{GrantType, PreSession, Session, SessionId, SessionStatus};
 use crate::tan::{TanChallenge, TanChallengeType};
 use crate::transaction::{RawTransaction, Transaction, TransactionFilterParameters};
@@ -352,24 +352,30 @@ impl ComdirectApi {
     }
 
     pub fn get_position<'d>(&self, deposit: &'d ComdirectDeposit, position_id: &PositionId) -> Result<Position<'d>, Error> {
-        let session = session_is_active!(self.session);
-        let url = format!("{}/{}/positions/{}", url!("/brokerage/v3/depots"), deposit.id(), position_id.as_str());
-
-        let response = self.make_get_session_request(&url, session)
-            .query(&[("without-attr", "depot")])
-            .send()?;
-
+        let response = self._get_position(deposit, position_id)?;
         let raw_position = response.json::<RawPosition>()?;
         Ok(Position::from_raw(raw_position, deposit))
     }
 
     pub fn update_position(&self, position: &mut Position) -> Result<(), Error> {
-        // todo: do not deserialize the whole position (id, ...) twice but deserialize just the changed information
-        // use DeserializeSeeded 
-        let new_position = self.get_position(position.deposit(), position.raw().id())?;
-        position.set_raw(new_position.into_raw());
+        let response = self._get_position(position.deposit(), position.raw().id())?;
 
+        let body = response.bytes()?;
+        let mut deserializer = Deserializer::from_slice(&body);
+
+        position.deserialize(&mut deserializer)?;
         Ok(())
+    }
+
+    fn _get_position(&self, deposit: &ComdirectDeposit, position_id: &PositionId) -> Result<Response, Error> {
+        let session = session_is_active!(self.session);
+        let url = format!("{}/{}/positions/{}", url!("/brokerage/v3/depots"), deposit.id(), position_id.as_str());
+
+        Ok(
+            self.make_get_session_request(&url, session)
+                .query(&[("without-attr", "depot")])
+                .send()?
+        )
     }
 
     #[inline(always)]
@@ -405,7 +411,7 @@ impl ComdirectApi {
         Ok(transactions)
     }
 
-    pub fn get_instrument(&self, derivative: &Derivative) -> Result<Vec<Instrument>, Error> {
+    pub fn get_instrument(&self, derivative: &Derivative) -> Result<Instrument, Error> {
         let session = session_is_active!(self.session);
         let url = format!("{}/{}", url!("/brokerage/v1/instruments/"), derivative.as_ref());
 
@@ -417,8 +423,8 @@ impl ComdirectApi {
             .send()?
             .error_for_status()?;
 
-        let json = response.json::<JsonResponseValues<Instrument>>()?;
-        Ok(json.values)
+        let json = response.json::<JsonResponseValue<Instrument>>()?;
+        Ok(json.values.0)
     }
 
     #[inline(always)]
@@ -491,7 +497,7 @@ impl ComdirectApi {
         Ok(ComdirectOrder::from_raw(raw, deposit))
     }
 
-    pub fn order_cost_indication(&self, order_outline: &OrderOutline) -> Result<(), Error> {
+    pub fn order_cost_indication<'o, 'd, 'i, 'm>(&self, order_outline: &'o OrderOutline<'d, 'i, 'm>) -> Result<CostIndication<'o, 'd, 'i, 'm>, Error> {
         const URL: &str = url!("/brokerage/v3/orders/costindicationexante");
         let session = session_is_active!(self.session);
 
@@ -500,13 +506,9 @@ impl ComdirectApi {
             .send()?
             .error_for_status()?;
 
-        println!("headers: {:?}", response.headers());
-        println!("body: {:?}", response.text().unwrap());
-
-        // todo: comdirect documentation 7.2.5
-        unimplemented!("deserialization of CostIndications is not yet implemented");
-
-        // Ok(())
+        let raw = response.json::<JsonResponseValue<RawCostIndication>>()?.values.0;
+        let cost_indication = CostIndication::from_raw(raw, order_outline);
+        Ok(cost_indication)
     }
 
     pub fn pre_validate_order_outline(&self, order_outline: &OrderOutline) -> Result<(), Error> {
@@ -517,10 +519,6 @@ impl ComdirectApi {
             .json(order_outline)
             .send()?
             .error_for_status()?;
-
-        // todo: maybe deserialize the response body
-        // the repose body is just a RawOrder
-        // RawOrder contains the expected value
 
         Ok(())
     }
@@ -575,42 +573,54 @@ impl ComdirectApi {
     }
 
     fn _pre_validate_order_change(&self, change_validation: OrderChangeValidation) -> Result<(), Error> {
-        use OrderChangeValidation::*;
         let session = session_is_active!(self.session);
         let url = format!(
             "{}/{}/prevalidation",
             url!("/brokerage/v3/orders"), change_validation.order_id()
         );
 
-        #[derive(serde::Serialize)]
-        struct Delete {}
-
-        let mut request = self.make_post_session_request(&url, session);
-        match change_validation {
-            Change(order_change) => request = request.json(&order_change),
-            Delete(_) => request = request.json(&Delete {})
-        }
-
-        request
+        Self::order_change_body(
+            self.make_post_session_request(&url, session),
+            &change_validation,
+        )
             .send()?
             .error_for_status()?;
         Ok(())
     }
 
     #[inline(always)]
-    pub fn order_change_cost_indication(&self, order_change: &OrderChange) -> Result<(), Error> {
+    pub fn order_change_cost_indication<'oc, 'o>(&self, order_change: &'oc OrderChange<'o>) -> Result<ChangeCostIndication<'oc, 'o, '_>, Error> {
         let validation = OrderChangeValidation::Change(order_change);
         self._order_change_cost_indication(validation)
     }
 
-    #[inline(always)]
-    pub fn order_deletion_cost_indication(&self, order: &ComdirectOrder) -> Result<(), Error> {
-        let validation = OrderChangeValidation::Delete(order);
-        self._order_change_cost_indication(validation)
-    }
+    // FIXME: Currently this interface does not work
+    // I already contacted the Comdirect support
+    // #[inline(always)]
+    // pub fn order_deletion_cost_indication<'o, 'd>(&self, order: &'o ComdirectOrder<'d>) -> Result<ChangeCostIndication<'_, 'o, 'd>, Error> {
+    //     let validation = OrderChangeValidation::Delete(order);
+    //     self._order_change_cost_indication(validation)
+    // }
 
-    fn _order_change_cost_indication(&self, _change_validation: OrderChangeValidation) -> Result<(), Error> {
-        unimplemented!()
+    fn _order_change_cost_indication<'oc, 'o, 'd>(&self, change_validation: OrderChangeValidation<'o, 'd, 'oc>) -> Result<ChangeCostIndication<'oc, 'o, 'd>, Error> {
+        use OrderChangeValidation::*;
+        let session = session_is_active!(self.session);
+        let url = format!("{}/{}/costindicationexante", url!("/brokerage/v3/orders"), change_validation.order_id());
+
+        let response = Self::order_change_body(
+            self.make_post_session_request(&url, session),
+            &change_validation,
+        )
+            .send()?
+            .error_for_status()?;
+
+        let raw = response.json::<JsonResponseValue<RawCostIndication>>()?.values.0;
+        let cost_indication = match change_validation {
+            Change(order_change) => ChangeCostIndication::Change { order_change, raw },
+            Delete(order) => ChangeCostIndication::Delete { order, raw }
+        };
+
+        Ok(cost_indication)
     }
 
     #[inline(always)]
@@ -704,7 +714,7 @@ impl ComdirectApi {
 
     #[inline(always)]
     fn make_request_id() -> String {
-        Local::now().format("%H%M%S%.3f").to_string()
+        Local::now().format("%H%M%S%3f").to_string()
     }
 
     #[inline(always)]
@@ -729,6 +739,15 @@ impl ComdirectApi {
     #[inline(always)]
     fn make_x_authentication_info_header(tan_challenge: &TanChallenge) -> (&'static str, String) {
         ("x-once-authentication-info", format!(r#"{{"id":"{}"}}"#, tan_challenge.id().as_str()))
+    }
+
+    #[inline(always)]
+    fn order_change_body(request: RequestBuilder, change_validation: &OrderChangeValidation) -> RequestBuilder {
+        use OrderChangeValidation::*;
+        match change_validation {
+            Change(order_change) => request.json(order_change),
+            Delete(_) => request.json(&DeleteOrder {})
+        }
     }
 
     session_request_method!(make_get_session_request, get);

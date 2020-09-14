@@ -3,6 +3,11 @@ pub(crate) struct JsonResponseValues<V> {
     pub(crate) values: Vec<V>
 }
 
+#[derive(serde::Deserialize)]
+pub(crate) struct JsonResponseValue<V> {
+    pub(crate) values: (V, )
+}
+
 /* todo: to deserialize vectors of orders/positions/transactions more efficiently, use seeded deserialization
          the current problem is, that these values don't come as pure json lists, but as JsonResponseValues
          to solve this problem some more coding needs to be done
@@ -30,6 +35,7 @@ impl<'de, 'd> DeserializeSeed<'de> for ComdirectOrderVec<'_, 'd> {
 
 pub(crate) mod amount_value;
 pub(crate) mod auction_type;
+pub(crate) mod comdirect_position;
 pub(crate) mod date;
 pub(crate) mod order_direction;
 pub(crate) mod order_type;

@@ -37,6 +37,14 @@ pub struct RawPosition {
     purchase_value: Option<Price>,
 }
 
+macro_rules! set_field {
+    ($method:ident($field:ident: $field_ty:ty)) => {
+        pub(crate) fn $method(&mut self, $field: $field_ty) {
+            self.raw.$field = $field;
+        }
+    };
+}
+
 impl<'d> Position<'d> {
     pub(crate) fn from_raw(raw: RawPosition, deposit: &'d ComdirectDeposit) -> Self {
         Self {
@@ -44,7 +52,8 @@ impl<'d> Position<'d> {
             raw,
         }
     }
-    pub(crate) fn into_raw(self) -> RawPosition {
-        self.raw
-    }
+
+    set_field!(set_quantity(quantity: Price));
+    set_field!(set_current_price(current_price: TimeBoundedPrice<Utc>));
+    set_field!(set_current_value(current_value: Price));
 }

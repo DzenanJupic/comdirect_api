@@ -57,7 +57,7 @@ fn market_place() -> MarketPlace {
         .swap_remove(1)
 }
 
-fn position<'d>(deposit: &'d ComdirectDeposit) -> Position<'d> {
+fn position(deposit: &ComdirectDeposit) -> Position {
     SESSION
         .get_positions(deposit)
         .unwrap()
@@ -178,7 +178,6 @@ fn get_deposit_filtered_transactions() {
 }
 
 #[test]
-// todo: why is a Vec returned?
 fn get_instrument() {
     // McDonald's
     let wkn = Derivative::WKN(WKN::try_from("856958").unwrap());
@@ -248,12 +247,12 @@ fn pre_validate_order_outline() {
 }
 
 #[test]
-#[ignore]
 fn order_cost_indication() {
     order_outline!(order_outline);
 
     SESSION.pre_validate_order_outline(&order_outline).unwrap();
-    SESSION.order_cost_indication(&order_outline).unwrap();
+    let cost_indication = SESSION.order_cost_indication(&order_outline).unwrap();
+    println!("cost indication: {:#?}", cost_indication);
 }
 
 #[test]
@@ -262,7 +261,7 @@ fn place_order() {
     order_outline!(order_outline);
 
     let order = SESSION.place_order(&order_outline).unwrap();
-    println!("order: {:?}", order);
+    println!("order: {:#?}", order);
     let _: ComdirectOrder = SESSION.get_order(&deposit(), order.id()).unwrap();
 }
 
@@ -288,18 +287,40 @@ fn pre_validate_order_deletion() {
 }
 
 #[test]
+fn order_change_cost_indication() {
+    order_outline!(order_outline);
+    let mut order = SESSION.place_order(&order_outline).unwrap();
+
+    let order_change = OrderChange::from_order0(&mut order)
+        .limit(Price::new(5.0, Currency::EUR));
+
+    let cost_indication = SESSION.order_change_cost_indication(&order_change).unwrap();
+    println!("cost indication: {:#?}", cost_indication);
+}
+
+// FIXME: see src/api_interface::ComdirectApi::order_deletion_cost_indication
+// #[test]
+// fn order_delete_cost_indication() {
+//     order_outline!(order_outline);
+//     let order = SESSION.place_order(&order_outline).unwrap();
+// 
+//     let cost_indication = SESSION.order_deletion_cost_indication(&order).unwrap();
+//     println!("cost indication: {:#?}", cost_indication);
+// }
+
+#[test]
 #[ignore]
 fn change_order() {
     order_outline!(order_outline);
     let mut order = SESSION.place_order(&order_outline).unwrap();
 
-    println!("before change: {:?}", order);
+    println!("before change: {:#?}", order);
 
     let order_change = OrderChange::from_order0(&mut order)
         .limit(Price::new(5.0, Currency::EUR));
 
     SESSION.change_order(order_change).unwrap();
-    println!("after change: {:?}", order);
+    println!("after change: {:#?}", order);
 }
 
 #[test]
