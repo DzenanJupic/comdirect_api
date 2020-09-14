@@ -5,20 +5,20 @@ use std::thread::sleep;
 use std::time::Duration;
 
 use lazy_static::lazy_static;
-use pecunia::price::Price;
-use pecunia::primitives::F64;
+use pecunia::prelude::*;
 use pecunia::units::currency::Currency;
 use stock_market_utils::derivative::{Derivative, ISIN, SYMBOL, WKN};
 use stock_market_utils::order::{OrderStatus, OrderType};
 
 use comdirect_api::api_interface::ComdirectApi;
-use comdirect_api::deposit::ComdirectDeposit;
-use comdirect_api::instrument::InstrumentId;
-use comdirect_api::market_place::{MarketPlace, MarketPlaceFilterParameters};
-use comdirect_api::order::{ComdirectOrder, OrderChange, OrderFilterParameters};
-use comdirect_api::order_outline::{OrderOutline, RawSingleOrderOutline};
-use comdirect_api::position::Position;
-use comdirect_api::transaction::TransactionFilterParameters;
+use comdirect_api::api_types::deposit::ComdirectDeposit;
+use comdirect_api::api_types::instrument::InstrumentId;
+use comdirect_api::api_types::market_place::{MarketPlace, MarketPlaceFilterParameters};
+use comdirect_api::api_types::order::{ComdirectOrder, OrderFilterParameters};
+use comdirect_api::api_types::order::order_change::OrderChange;
+use comdirect_api::api_types::order::order_outline::{OrderOutline, RawSingleOrderOutline};
+use comdirect_api::api_types::position::Position;
+use comdirect_api::api_types::transaction::TransactionFilterParameters;
 
 lazy_static! {
     static ref SESSION: Arc<ComdirectApi> = Arc::new(comdirect_session().unwrap());
