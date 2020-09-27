@@ -14,13 +14,18 @@ struct AmountValue {
 pub(crate) mod quantity {
     use pecunia::primitives::F64;
     use pecunia::units::NotAUnit;
-    use serde::{Serialize, Serializer};
+    use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
     use super::AmountValue;
 
     pub(crate) fn serialize<S>(&value: &F64, serializer: S) -> Result<S::Ok, S::Error>
         where S: Serializer {
         AmountValue { value, unit: NotAUnit }.serialize(serializer)
+    }
+
+    pub(crate) fn deserialize<'de, D>(deserializer: D) -> Result<F64, D::Error>
+        where D: Deserializer<'de> {
+        Ok(AmountValue::deserialize(deserializer)?.value)
     }
 }
 

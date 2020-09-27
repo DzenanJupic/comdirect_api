@@ -1,3 +1,7 @@
+use serde::{Serialize, Serializer};
+
+use crate::types::deposit::ComdirectDeposit;
+
 #[derive(serde::Deserialize)]
 pub(crate) struct JsonResponseValues<V> {
     pub(crate) values: Vec<V>
@@ -6,6 +10,11 @@ pub(crate) struct JsonResponseValues<V> {
 #[derive(serde::Deserialize)]
 pub(crate) struct JsonResponseValue<V> {
     pub(crate) values: (V, )
+}
+
+pub(crate) fn serialize_deposit_as_id<S>(deposit: &ComdirectDeposit, serializer: S) -> Result<S::Ok, S::Error>
+    where S: Serializer {
+    deposit.id().serialize(serializer)
 }
 
 /* todo: to deserialize vectors of orders/positions/transactions more efficiently, use seeded deserialization

@@ -3,7 +3,7 @@ use pecunia::price::{Price, TimeBoundedPrice};
 use serde::{Deserialize, Deserializer};
 use serde::de::DeserializeSeed;
 
-use crate::api_types::position::Position;
+use crate::types::position::Position;
 
 impl<'de> DeserializeSeed<'de> for &mut Position<'_> {
     type Value = ();

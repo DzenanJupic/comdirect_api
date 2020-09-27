@@ -35,7 +35,7 @@ pub(crate) mod venue_map {
     use serde::Deserializer;
     use serde::export::fmt;
 
-    use crate::api_types::market_place::OrderTypeAbilities;
+    use crate::types::market_place::OrderTypeAbilities;
 
     use super::*;
 

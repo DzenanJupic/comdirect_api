@@ -1,12 +1,12 @@
 use derive_builder::Builder;
 use getset::{Getters, Setters};
 use pecunia::prelude::*;
-use serde::{Serialize, Serializer};
+use serde::Serialize;
 use stock_market_utils::order::{AuctionType, OrderDirection, OrderType, OrderTypeExtension, OrderValidity};
 
-use crate::api_types::deposit::ComdirectDeposit;
-use crate::api_types::instrument::InstrumentId;
-use crate::api_types::market_place::MarketPlaceId;
+use crate::types::deposit::ComdirectDeposit;
+use crate::types::instrument::InstrumentId;
+use crate::types::market_place::MarketPlaceId;
 
 #[derive(Clone, Debug, Serialize, PartialEq)]
 #[serde(untagged)]
@@ -32,8 +32,9 @@ pub struct RawCombinationOrderOutline<'d, 'i, 'm> {
 #[serde(rename_all = "camelCase")]
 pub struct RawSingleOrderOutline<'d, 'i, 'm> {
     #[serde(rename = "depotId")]
-    #[serde(serialize_with = "serialize_deposit_as_id")]
+    #[serde(serialize_with = "crate::serde::serialize_deposit_as_id")]
     deposit: &'d ComdirectDeposit,
+    // todo: is this really optional?
     #[serde(skip_serializing_if = "Option::is_none")]
     instrument_id: Option<&'i InstrumentId>,
     #[serde(rename = "venueId")]
@@ -106,9 +107,4 @@ impl RawSingleOrderOutline<'_, '_, '_> {
     pub fn builder<'d, 'i, 'm>() -> RawSingleOrderOutlineBuilder<'d, 'i, 'm> {
         RawSingleOrderOutlineBuilder::default()
     }
-}
-
-pub(crate) fn serialize_deposit_as_id<S>(deposit: &ComdirectDeposit, serializer: S) -> Result<S::Ok, S::Error>
-    where S: Serializer {
-    deposit.id().serialize(serializer)
 }

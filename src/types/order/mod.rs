@@ -5,9 +5,9 @@ use stock_market_utils::order::{AuctionType, OrderDirection, OrderStatus, OrderT
 
 use execution::Execution;
 
-use crate::api_types::deposit::ComdirectDeposit;
-use crate::api_types::instrument::InstrumentId;
-use crate::api_types::market_place::MarketPlaceId;
+use crate::types::deposit::ComdirectDeposit;
+use crate::types::instrument::InstrumentId;
+use crate::types::market_place::MarketPlaceId;
 
 pub mod execution;
 pub mod order_change;
@@ -90,7 +90,7 @@ pub struct RawSingleOrder {
     relative_trailing_limit: Option<Percent>,
     #[serde(rename = "creationTimestamp")]
     #[serde(with = "crate::serde::date::time_stamp_string_utc")]
-    time: DateTime<Utc>,
+    creation: DateTime<Utc>,
     #[serde(default)]
     #[serde(rename = "bestEx")]
     best_execution: bool,

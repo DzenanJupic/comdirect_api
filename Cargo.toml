@@ -21,4 +21,7 @@ stock-market-utils = { path = "C:/Users/info/Code/Rust/stock-market-utils", vers
 lazy_static = "1.4.0"
 
 [features]
+default = ["raw_interface"]
+
 test = []
+raw_interface = []

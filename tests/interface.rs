@@ -8,17 +8,18 @@ use lazy_static::lazy_static;
 use pecunia::prelude::*;
 use pecunia::units::currency::Currency;
 use stock_market_utils::derivative::{Derivative, ISIN, SYMBOL, WKN};
-use stock_market_utils::order::{OrderStatus, OrderType};
+use stock_market_utils::order::{OrderDirection, OrderStatus, OrderType};
 
-use comdirect_api::api_interface::ComdirectApi;
-use comdirect_api::api_types::deposit::ComdirectDeposit;
-use comdirect_api::api_types::instrument::InstrumentId;
-use comdirect_api::api_types::market_place::{MarketPlace, MarketPlaceFilterParameters};
-use comdirect_api::api_types::order::{ComdirectOrder, OrderFilterParameters};
-use comdirect_api::api_types::order::order_change::OrderChange;
-use comdirect_api::api_types::order::order_outline::{OrderOutline, RawSingleOrderOutline};
-use comdirect_api::api_types::position::Position;
-use comdirect_api::api_types::transaction::TransactionFilterParameters;
+use comdirect_api::interface::ComdirectApi;
+use comdirect_api::types::deposit::ComdirectDeposit;
+use comdirect_api::types::instrument::InstrumentId;
+use comdirect_api::types::market_place::{MarketPlace, MarketPlaceFilterParameters};
+use comdirect_api::types::order::{ComdirectOrder, OrderFilterParameters};
+use comdirect_api::types::order::order_change::OrderChange;
+use comdirect_api::types::order::order_outline::{OrderOutline, RawSingleOrderOutline};
+use comdirect_api::types::position::Position;
+use comdirect_api::types::quote::QuoteOutline;
+use comdirect_api::types::transaction::TransactionFilterParameters;
 
 lazy_static! {
     static ref SESSION: Arc<ComdirectApi> = Arc::new(comdirect_session().unwrap());
@@ -81,6 +82,17 @@ fn order_outline<'d, 'm, 'i>(deposit: &'d ComdirectDeposit, market_place: &'m Ma
     OrderOutline::SingleOrder(raw)
 }
 
+fn quote_outline<'d, 'm, 'i>(deposit: &'d ComdirectDeposit, market_place: &'m MarketPlace, instrument_id: &'i InstrumentId) -> QuoteOutline<'d, 'i, 'm> {
+    QuoteOutline::builder()
+        .deposit(&deposit)
+        .market_place_id(market_place.id())
+        .instrument_id(&instrument_id)
+        .direction(OrderDirection::Buy)
+        .quantity(F64::new(1.0))
+        .build()
+        .unwrap()
+}
+
 macro_rules! position {
     ($position:ident) => {
         let deposit = deposit();
@@ -105,6 +117,15 @@ macro_rules! order_outline {
         let market_place = market_place();
         let instrument_id = instrument_id();
         let $order_outline = order_outline(&deposit, &market_place, &instrument_id);
+    };
+}
+
+macro_rules! quote_outline {
+    ($quote_outline:ident) => {
+        let deposit = deposit();
+        let market_place = market_place();
+        let instrument_id = instrument_id();
+        let $quote_outline = quote_outline(&deposit, &market_place, &instrument_id);
     };
 }
 
@@ -338,4 +359,14 @@ fn delete_order() {
         Ok(o) => assert_eq!(o.status0(), OrderStatus::Canceled),
         Err(e) => assert_eq!(e, Error::NotFound)
     }
+}
+
+#[test]
+fn get_quote() {
+    quote_outline!(quote_outline);
+
+    quote_outline.instrument_id();
+    let quote = SESSION.get_quote(&quote_outline).unwrap();
+
+    println!("quote: {:#?}", quote);
 }

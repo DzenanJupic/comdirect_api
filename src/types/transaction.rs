@@ -3,8 +3,8 @@ use pecunia::price::Price;
 use serde::{Deserialize, Serialize};
 use stock_market_utils::derivative::{ISIN, WKN};
 
-use crate::api_types::deposit::ComdirectDeposit;
-use crate::api_types::position::Position;
+use crate::types::deposit::ComdirectDeposit;
+use crate::types::position::Position;
 
 new_type_ids!(
     pub struct TransactionId

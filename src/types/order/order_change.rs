@@ -2,7 +2,7 @@ use pecunia::prelude::*;
 use serde::{Serialize, Serializer};
 use stock_market_utils::order::OrderValidity;
 
-use crate::api_types::order::{ComdirectOrder, OrderId, RawOrder, RawSingleOrder};
+use crate::types::order::{ComdirectOrder, OrderId, RawOrder, RawSingleOrder};
 
 pub(crate) enum OrderChangeValidation<'o, 'd, 'oc> {
     Change(&'oc OrderChange<'o>),
@@ -11,7 +11,7 @@ pub(crate) enum OrderChangeValidation<'o, 'd, 'oc> {
 
 pub(crate) enum OrderChangeAction<'o, 'd> {
     Change(OrderChange<'o>),
-    Delete(ComdirectOrder<'d>),
+    Delete(&'o ComdirectOrder<'d>),
 }
 
 #[derive(Debug, Serialize, PartialEq, getset::Getters)]

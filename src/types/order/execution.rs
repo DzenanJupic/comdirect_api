@@ -2,7 +2,7 @@ use chrono::{DateTime, Utc};
 use pecunia::price::Price;
 use serde::Deserialize;
 
-use crate::api_types::order::ExecutionId;
+use crate::types::order::ExecutionId;
 
 #[derive(Clone, Debug, Deserialize, PartialEq)]
 pub struct Execution {

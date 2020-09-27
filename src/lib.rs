@@ -42,8 +42,11 @@ macro_rules! option_builder_fn {
     };
 }
 
-pub mod api_interface;
-pub mod api_types;
+#[cfg(feature = "raw_interface")]
+pub mod interface;
+#[cfg(not(feature = "raw_interface"))]
+mod interface;
+pub mod types;
 pub mod error;
 
 #[doc(hidden)]
