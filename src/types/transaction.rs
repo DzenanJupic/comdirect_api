@@ -1,7 +1,7 @@
 use chrono::NaiveDate;
 use pecunia::price::Price;
 use serde::{Deserialize, Serialize};
-use stock_market_utils::derivative::{ISIN, WKN};
+use wall_street::derivative::{ISIN, WKN};
 
 use crate::types::deposit::ComdirectDeposit;
 use crate::types::position::Position;
@@ -19,13 +19,17 @@ pub struct Transaction<'d> {
 #[derive(Clone, Debug, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct RawTransaction {
+    #[serde(default)]
     #[serde(rename = "transaction_id")]
+    #[serde(deserialize_with = "TransactionId::de_option")]
     id: Option<TransactionId>,
     #[serde(rename = "bookingStatus")]
     status: BookingStatus,
     #[serde(rename = "bookingDate")]
     #[serde(with = "crate::serde::date::date_string")]
     date: NaiveDate,
+    #[serde(with = "crate::serde::amount_value::price")]
+    quantity: Price,
     #[serde(rename = "transactionValue")]
     #[serde(with = "crate::serde::amount_value::price")]
     value: Price,

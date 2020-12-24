@@ -1,7 +1,7 @@
 use chrono::NaiveDate;
 use pecunia::{serde_option, serde_with};
 use serde::{Deserialize, Serialize};
-use stock_market_utils::order::OrderValidity;
+use wall_street::order::OrderValidity;
 
 #[derive(Serialize, Deserialize)]
 #[serde(remote = "OrderValidity")]

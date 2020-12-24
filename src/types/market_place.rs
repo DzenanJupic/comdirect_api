@@ -3,15 +3,15 @@ use std::collections::HashMap;
 use derive_builder::Builder;
 use getset::{Getters, Setters};
 use serde::{Deserialize, Serialize};
-use stock_market_utils::derivative::{ISIN, SYMBOL, WKN};
-use stock_market_utils::order::{AuctionType, OrderDirection, OrderType, OrderTypeExtension};
+use wall_street::derivative::{ISIN, SYMBOL, WKN};
+use wall_street::order::{AuctionType, OrderDirection, OrderType, OrderTypeExtension};
 
+use crate::types::instrument::InstrumentId;
 use crate::types::order::ComdirectOrderValidityType;
 
 new_type_ids!(
     pub struct MarketPlaceId
-    pub struct MarketPalceName
-    pub struct InstrumentId
+    pub struct MarketPlaceName
 );
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Getters)]
@@ -19,8 +19,10 @@ new_type_ids!(
 #[serde(rename_all = "camelCase")]
 pub struct MarketPlace {
     #[serde(rename = "venueId")]
+    #[serde(with = "MarketPlaceId")]
     id: MarketPlaceId,
-    name: MarketPalceName,
+    #[serde(with = "MarketPlaceName")]
+    name: MarketPlaceName,
     #[serde(rename = "sides")]
     #[serde(with = "crate::serde::order_direction::vec2")]
     order_directions: Vec<OrderDirection>,
@@ -32,10 +34,10 @@ pub struct MarketPlace {
 #[derive(Clone, Debug, Deserialize, PartialEq, Getters)]
 #[getset(get = "pub")]
 pub struct OrderTypeAbilities {
-    #[serde(default)]
+    #[serde(rename = "limitExtensions")]
     #[serde(with = "crate::serde::order_type_extension::vec3")]
     order_type_extensions: Vec<OrderTypeExtension>,
-    #[serde(default)]
+    #[serde(rename = "tradingRestrictions")]
     #[serde(with = "crate::serde::auction_type::vec3")]
     auction_types: Vec<AuctionType>,
 }
@@ -56,6 +58,7 @@ pub(crate) struct Dimensions {
 #[builder(setter(strip_option))]
 #[serde(rename_all = "camelCase")]
 pub struct MarketPlaceFilterParameters<'a> {
+    // todo: serialize as wkn, isin, or symbol
     instrument_id: Option<&'a InstrumentId>,
     #[serde(rename = "WKN")]
     wkn: Option<&'a WKN>,

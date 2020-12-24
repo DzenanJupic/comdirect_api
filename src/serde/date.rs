@@ -72,6 +72,26 @@ macro_rules! date_time {
                     .map(|d| d.with_timezone(&$tz))
                     .map_err(|_| D::Error::invalid_value(Unexpected::Str(date), &$help_text))
             }
+            
+            pub(crate) mod option {
+                use super::*;
+                
+                #[derive(Deserialize)]
+                #[serde(transparent)]
+                struct DateTimeDeserializer {
+                    #[serde(deserialize_with = "super::deserialize")]
+                    remote: DateTime<$tz>
+                }
+            
+                #[allow(unused)]
+                pub(crate) fn deserialize<'de, D>(deserializer: D) -> Result<Option<DateTime<$tz>>, D::Error>
+                    where D: Deserializer<'de> {
+                    Ok(
+                        Option::<DateTimeDeserializer>::deserialize(deserializer)?
+                            .map(|dt| dt.remote)
+                    )
+                }
+            }
         }
     };
 }

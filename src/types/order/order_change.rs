@@ -1,17 +1,17 @@
 use pecunia::prelude::*;
 use serde::{Serialize, Serializer};
-use stock_market_utils::order::OrderValidity;
+use wall_street::order::OrderValidity;
 
-use crate::types::order::{ComdirectOrder, OrderId, RawOrder, RawSingleOrder};
+use crate::types::order::{Order, OrderId, RawOrder, RawSingleOrder};
 
 pub(crate) enum OrderChangeValidation<'o, 'd, 'oc> {
     Change(&'oc OrderChange<'o>),
-    Delete(&'o ComdirectOrder<'d>),
+    Delete(&'o Order<'d>),
 }
 
 pub(crate) enum OrderChangeAction<'o, 'd> {
     Change(OrderChange<'o>),
-    Delete(&'o ComdirectOrder<'d>),
+    Delete(&'o Order<'d>),
 }
 
 #[derive(Debug, Serialize, PartialEq, getset::Getters)]
@@ -70,7 +70,7 @@ impl OrderChangeAction<'_, '_> {
 }
 
 impl<'o> OrderChange<'o> {
-    pub fn from_order0(order: &'o mut ComdirectOrder<'_>) -> Self {
+    pub fn from_order0(order: &'o mut Order<'_>) -> Self {
         let raw_single_order = match order.raw {
             RawOrder::SingleOrder(ref mut raw) => raw,
             RawOrder::CombinationOrder(ref mut raw) => &mut raw.sub_orders.0
@@ -78,7 +78,7 @@ impl<'o> OrderChange<'o> {
         Self::from_raw_single_order(raw_single_order)
     }
 
-    pub fn from_order1(order: &'o mut ComdirectOrder<'_>) -> Self {
+    pub fn from_order1(order: &'o mut Order<'_>) -> Self {
         let raw_single_order = match order.raw {
             RawOrder::SingleOrder(ref mut raw) => raw,
             RawOrder::CombinationOrder(ref mut raw) => &mut raw.sub_orders.1

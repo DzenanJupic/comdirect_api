@@ -1,6 +1,6 @@
 use pecunia::{serde_option, serde_with};
 use serde::{Deserialize, Serialize};
-use stock_market_utils::order::OrderType;
+use wall_street::order::OrderType;
 
 #[derive(Serialize, Deserialize)]
 #[serde(remote = "OrderType")]

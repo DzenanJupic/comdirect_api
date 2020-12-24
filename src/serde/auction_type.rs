@@ -1,6 +1,6 @@
+use pecunia::{serde_vec, serde_with};
 use serde::{Deserialize, Serialize};
-use stock_market_utils::order::AuctionType;
-use pecunia::{serde_with, serde_vec};
+use wall_street::order::AuctionType;
 
 #[derive(Serialize, Deserialize)]
 #[serde(remote = "AuctionType")]
@@ -22,5 +22,6 @@ serde_with!(Deserializer for AuctionType as pub(crate) AuctionTypeDeserializer w
 
 pub(crate) mod vec3 {
     use super::*;
+
     serde_vec!(deserialize AuctionType as pub(crate) AuctionTypeVecDeserializer with AuctionTypeDeserializer, max=3);
 }

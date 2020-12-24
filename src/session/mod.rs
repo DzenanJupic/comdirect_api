@@ -5,10 +5,10 @@ use serde::Deserialize;
 pub(crate) mod tan;
 
 new_type_ids!(
-    pub struct SessionId
-    pub struct SessionUuid
-    pub struct AccessToken
-    pub struct RefreshToken
+    pub(crate) struct SessionId
+    pub(crate) struct SessionUuid
+    pub(crate) struct AccessToken
+    pub(crate) struct RefreshToken
 );
 
 #[derive(Clone, Debug, PartialEq)]
@@ -29,14 +29,15 @@ pub(crate) struct PreSession {
     pub(crate) expires_at: DateTime<Local>,
 }
 
-impl PreSession {
-    pub fn session(self, session_id: SessionId, session_uuid: SessionUuid) -> Session {
-        Session {
+impl Session {
+    pub(crate) fn from_pre_session(pre_session: PreSession, session_id: SessionId, session_uuid: SessionUuid)
+        -> Self {
+        Self {
             session_id,
             session_uuid,
-            access_token: self.access_token,
-            refresh_token: self.refresh_token,
-            expires_at: self.expires_at,
+            access_token: pre_session.access_token,
+            refresh_token: pre_session.refresh_token,
+            expires_at: pre_session.expires_at,
         }
     }
 }
@@ -49,10 +50,19 @@ pub(crate) struct SessionStatus {
     tan_is_active: bool,
 }
 
-pub(crate) enum GrantType {
+pub(crate) enum GrantType<'t> {
     Password,
-    CdSecondary(AccessToken),
-    Refresh(RefreshToken),
+    CdSecondary(&'t AccessToken),
+    Refresh(&'t RefreshToken),
+}
+
+impl Session {
+    #[inline(always)]
+    pub(crate) fn update(&mut self, pre_session: PreSession) {
+        self.access_token = pre_session.access_token;
+        self.refresh_token = pre_session.refresh_token;
+        self.expires_at = pre_session.expires_at;
+    }
 }
 
 impl SessionStatus {
@@ -61,7 +71,7 @@ impl SessionStatus {
     }
 }
 
-impl GrantType {
+impl GrantType<'_> {
     pub const fn as_str(&self) -> &'static str {
         match self {
             GrantType::Password => "password",

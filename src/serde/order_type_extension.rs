@@ -1,6 +1,6 @@
-use serde::{Deserialize,  Serialize};
-use stock_market_utils::order::OrderTypeExtension;
-use pecunia::{serde_with, serde_vec};
+use pecunia::{serde_vec, serde_with};
+use serde::{Deserialize, Serialize};
+use wall_street::order::OrderTypeExtension;
 
 #[derive(Serialize, Deserialize)]
 #[serde(remote = "OrderTypeExtension")]
@@ -20,6 +20,7 @@ serde_with!(Deserializer for OrderTypeExtension as pub(crate) OrderTypeExtension
 
 pub(crate) mod vec3 {
     use super::*;
+
     serde_vec!(serialize OrderTypeExtension as pub(crate) OrderTypeExtensionOptionSerializer with OrderTypeExtensionSerializer);
     serde_vec!(deserialize OrderTypeExtension as pub(crate) OrderTypeExtensionOptionDeserializer with OrderTypeExtensionDeserializer, max=3);
 }

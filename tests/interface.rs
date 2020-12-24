@@ -7,32 +7,33 @@ use std::time::Duration;
 use lazy_static::lazy_static;
 use pecunia::prelude::*;
 use pecunia::units::currency::Currency;
-use stock_market_utils::derivative::{Derivative, ISIN, SYMBOL, WKN};
-use stock_market_utils::order::{OrderDirection, OrderStatus, OrderType};
+use wall_street::derivative::{Derivative, ISIN, SYMBOL, WKN};
+use wall_street::order::{OrderDirection, OrderStatus, OrderType};
 
-use comdirect_api::interface::ComdirectApi;
+use comdirect_api::interface::ApiClient;
 use comdirect_api::types::deposit::ComdirectDeposit;
 use comdirect_api::types::instrument::InstrumentId;
 use comdirect_api::types::market_place::{MarketPlace, MarketPlaceFilterParameters};
-use comdirect_api::types::order::{ComdirectOrder, OrderFilterParameters};
+use comdirect_api::types::order::{Order, OrderFilterParameters};
 use comdirect_api::types::order::order_change::OrderChange;
 use comdirect_api::types::order::order_outline::{OrderOutline, RawSingleOrderOutline};
 use comdirect_api::types::position::Position;
+use comdirect_api::types::quote::order_outline::QuoteOrderOutline;
 use comdirect_api::types::quote::QuoteOutline;
 use comdirect_api::types::transaction::TransactionFilterParameters;
 
 lazy_static! {
-    static ref SESSION: Arc<ComdirectApi> = Arc::new(comdirect_session().unwrap());
+    static ref SESSION: Arc<ApiClient> = Arc::new(comdirect_session().unwrap());
 }
 
-fn comdirect_session() -> Result<ComdirectApi, Box<dyn Error>> {
+fn comdirect_session() -> Result<ApiClient, Box<dyn Error>> {
     let mut comdirect = new_comdirect();
     comdirect.new_session()?;
     Ok(comdirect)
 }
 
-fn new_comdirect() -> ComdirectApi {
-    ComdirectApi::new(
+fn new_comdirect() -> ApiClient {
+    ApiClient::new(
         env!("client_id").to_string().into(),
         env!("client_secret").to_string().into(),
         env!("username").to_string().into(),
@@ -55,7 +56,13 @@ fn market_place() -> MarketPlace {
     SESSION
         .get_marketplaces_filtered(&filter_parameters)
         .unwrap()
-        .swap_remove(1)
+        .into_iter()
+        .find(|m| {
+            m
+                .order_types()
+                .contains_key(&OrderType::Quote)
+        })
+        .unwrap()
 }
 
 fn position(deposit: &ComdirectDeposit) -> Position {
@@ -259,7 +266,6 @@ fn get_order() {
 }
 
 
-
 #[test]
 fn pre_validate_order_outline() {
     order_outline!(order_outline);
@@ -283,7 +289,7 @@ fn place_order() {
 
     let order = SESSION.place_order(&order_outline).unwrap();
     println!("order: {:#?}", order);
-    let _: ComdirectOrder = SESSION.get_order(&deposit(), order.id()).unwrap();
+    let _: Order = SESSION.get_order(&deposit(), order.id()).unwrap();
 }
 
 #[test]
@@ -363,10 +369,68 @@ fn delete_order() {
 
 #[test]
 fn get_quote() {
-    quote_outline!(quote_outline);
+    // quote_outline!(quote_outline);
+
+    let instrument_id = InstrumentId::from(Derivative::wkn_from_str("750000").unwrap());
+    let market_place: MarketPlace = SESSION
+        .get_marketplaces_filtered(
+            &MarketPlaceFilterParameters::builder()
+                .wkn(&WKN::try_new(String::from("750000")).unwrap())
+                .build()
+                .unwrap()
+        ).unwrap()
+        .into_iter()
+        .filter(|m| m.name().as_str().contains("Lang"))
+        .find(|m| m.order_types().contains_key(&OrderType::Quote))
+        .unwrap();
+    let deposit = SESSION.get_deposits().unwrap().swap_remove(0);
+
+    let quote_outline = QuoteOutline::builder()
+        .deposit(&deposit)
+        .market_place_id(market_place.id())
+        .instrument_id(&instrument_id)
+        .direction(OrderDirection::Buy)
+        .quantity(F64::new(1.0))
+        .build()
+        .unwrap();
 
     quote_outline.instrument_id();
     let quote = SESSION.get_quote(&quote_outline).unwrap();
 
     println!("quote: {:#?}", quote);
+
+    SESSION.quote_order_cost_indication(&QuoteOrderOutline::from(quote)).unwrap();
+}
+
+#[test]
+fn place_quote_order() {
+    let instrument_id = InstrumentId::from(Derivative::wkn_from_str("750000").unwrap());
+    let market_place: MarketPlace = SESSION
+        .get_marketplaces_filtered(
+            &MarketPlaceFilterParameters::builder()
+                .wkn(&WKN::try_new(String::from("750000")).unwrap())
+                .build()
+                .unwrap()
+        ).unwrap()
+        .into_iter()
+        .filter(|m| m.name().as_str().contains("Lang"))
+        .find(|m| m.order_types().contains_key(&OrderType::Quote))
+        .unwrap();
+    let deposit = SESSION.get_deposits().unwrap().swap_remove(0);
+
+    let quote_outline = QuoteOutline::builder()
+        .deposit(&deposit)
+        .market_place_id(market_place.id())
+        .instrument_id(&instrument_id)
+        .direction(OrderDirection::Sell)
+        .quantity(F64::new(1.0))
+        .build()
+        .unwrap();
+
+    let quote = SESSION.get_quote(&quote_outline).unwrap();
+    println!("quote: {:#?}", quote);
+    let quote_order_outline = QuoteOrderOutline::from(quote);
+    println!("quote order outline: {:#?}", quote_order_outline);
+    let order: Order = SESSION.place_quote_order(quote_order_outline).unwrap();
+    println!("order: {:#?}", order);
 }

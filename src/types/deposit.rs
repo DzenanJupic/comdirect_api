@@ -1,9 +1,10 @@
 use derive_more::Display;
 use serde::{Deserialize, Serialize};
-use stock_market_utils::deposit::Deposit;
+use wall_street::deposit::Deposit;
 
 new_type_ids!(
     pub struct DepositId
+    // [deserialize]
     pub struct DepositDisplayId
 );
 
@@ -18,6 +19,7 @@ new_type_ids!(
 pub struct ComdirectDeposit {
     #[serde(rename = "depotId")]
     id: DepositId,
+    #[serde(with = "DepositDisplayId")]
     #[serde(rename = "depotDisplayId")]
     display_id: DepositDisplayId,
 }

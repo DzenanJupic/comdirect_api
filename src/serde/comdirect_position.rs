@@ -1,5 +1,6 @@
 use chrono::Utc;
 use pecunia::price::{Price, TimeBoundedPrice};
+use pecunia::primitives::F64;
 use serde::{Deserialize, Deserializer};
 use serde::de::DeserializeSeed;
 
@@ -23,8 +24,8 @@ impl<'de> DeserializeSeed<'de> for &mut Position<'_> {
 #[derive(serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct UpdatePosition {
-    #[serde(with = "crate::serde::amount_value::price")]
-    quantity: Price,
+    #[serde(with = "crate::serde::amount_value::quantity")]
+    quantity: F64,
     #[serde(with = "crate::serde::time_bounded_price")]
     current_price: TimeBoundedPrice<Utc>,
     #[serde(with = "crate::serde::amount_value::price")]

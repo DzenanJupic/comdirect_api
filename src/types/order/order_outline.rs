@@ -2,7 +2,7 @@ use derive_builder::Builder;
 use getset::{Getters, Setters};
 use pecunia::prelude::*;
 use serde::Serialize;
-use stock_market_utils::order::{AuctionType, OrderDirection, OrderType, OrderTypeExtension, OrderValidity};
+use wall_street::order::{AuctionType, OrderDirection, OrderType, OrderTypeExtension, OrderValidity};
 
 use crate::types::deposit::ComdirectDeposit;
 use crate::types::instrument::InstrumentId;

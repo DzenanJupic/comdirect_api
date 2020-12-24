@@ -1,7 +1,7 @@
 use chrono::{DateTime, Utc};
 use pecunia::prelude::*;
 use serde::{Deserialize, Serialize};
-use stock_market_utils::order::{AuctionType, OrderDirection, OrderStatus, OrderType, OrderTypeExtension, OrderValidity};
+use wall_street::order::{AuctionType, OrderDirection, OrderStatus, OrderType, OrderTypeExtension, OrderValidity};
 
 use execution::Execution;
 
@@ -20,7 +20,7 @@ new_type_ids!(
 
 #[derive(Debug, PartialEq, getset::Getters)]
 #[getset(get = "pub")]
-pub struct ComdirectOrder<'d> {
+pub struct Order<'d> {
     deposit: &'d ComdirectDeposit,
     raw: RawOrder,
 }
@@ -148,7 +148,7 @@ impl OrderId {
     }
 }
 
-impl<'d> ComdirectOrder<'d> {
+impl<'d> Order<'d> {
     #[inline(always)]
     pub(crate) fn from_raw(raw: RawOrder, deposit: &'d ComdirectDeposit) -> Self {
         Self {

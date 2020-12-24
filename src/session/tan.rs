@@ -1,7 +1,7 @@
 use serde::Deserialize;
 
 new_type_ids!(
-    pub struct TanChallengeId
+    pub(crate) struct TanChallengeId
 );
 
 #[derive(Debug, Deserialize, getset::Getters)]

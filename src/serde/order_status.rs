@@ -1,6 +1,6 @@
-use pecunia::{serde_with};
+use pecunia::serde_with;
 use serde::{Deserialize, Serialize};
-use stock_market_utils::order::OrderStatus;
+use wall_street::order::OrderStatus;
 
 #[derive(Serialize, Deserialize)]
 #[serde(remote = "OrderStatus")]
@@ -26,6 +26,7 @@ serde_with!(Deserializer for OrderStatus as pub(crate) OrderStatusDeserializer w
 
 pub(crate) mod option {
     use super::*;
+
     pecunia::serde_option!(serialize OrderStatus as pub(crate) OrderStatusOptionSerialier with OrderStatusSerializer);
     pecunia::serde_option!(deserialize OrderStatus as pub(crate) OrderStatusOptionDeserialier with OrderStatusDeserializer);
 }

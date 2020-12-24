@@ -1,6 +1,6 @@
 use pecunia::units::currency::Currency;
 use serde::Deserialize;
-use stock_market_utils::derivative::{Derivative, ISIN, SYMBOL, WKN};
+use wall_street::derivative::{Derivative, ISIN, SYMBOL, WKN};
 
 new_type_ids!(
     pub struct InstrumentId
@@ -11,8 +11,10 @@ new_type_ids!(
 #[getset(get = "pub")]
 #[serde(rename_all = "camelCase")]
 pub struct Instrument {
+    #[serde(with = "InstrumentId")]
     #[serde(rename = "instrumentId")]
     id: InstrumentId,
+    #[serde(with = "InstrumentName")]
     name: InstrumentName,
     isin: ISIN,
     #[serde(rename = "mnemonic")]

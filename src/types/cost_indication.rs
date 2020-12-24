@@ -2,7 +2,7 @@ use pecunia::prelude::*;
 use pecunia::units::currency::Currency;
 use serde::Deserialize;
 
-use crate::types::order::ComdirectOrder;
+use crate::types::order::Order;
 use crate::types::order::order_change::OrderChange;
 use crate::types::order::order_outline::OrderOutline;
 
@@ -20,7 +20,7 @@ pub enum ChangeCostIndication<'oc, 'o, 'd> {
         raw: RawCostIndication,
     },
     Delete {
-        order: &'o ComdirectOrder<'d>,
+        order: &'o Order<'d>,
         raw: RawCostIndication,
     },
 }
